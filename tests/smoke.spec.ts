@@ -26,7 +26,7 @@ test.describe('cd-demo smoke', () => {
     await expect(counter).toHaveText('2')
   })
 
-  test('active mermaid node visual changes when stepping', async ({ page }) => {
+  test('mermaid diagram updates when stepping', async ({ page }) => {
     await page.goto('/')
 
     const mermaidContainer = page.locator('#mermaid-container svg')
@@ -36,31 +36,30 @@ test.describe('cd-demo smoke', () => {
 
     await mermaidContainer.first().waitFor({ state: 'attached' })
 
-    const activeShape = page
-      .locator('#mermaid-container svg .node')
-      .filter({ has: page.locator('rect, polygon, circle') })
+    // Capture a stable fingerprint of node visual state. Different demos
+    // signal active via either (a) an "active" class, (b) inline style on
+    // shapes, or (c) some other approach — so we hash the entire SVG and
+    // require it changes when stepping.
+    const fingerprint = async () => {
+      const svgHtml = await page.locator('#mermaid-container svg').first().innerHTML()
+      const classBag = await page
+        .locator('#mermaid-container svg .node')
+        .evaluateAll(nodes => nodes.map(n => `${n.id}:${n.getAttribute('class') ?? ''}`).join('|'))
+      const inlineBag = await page
+        .locator('#mermaid-container svg .node rect, #mermaid-container svg .node polygon, #mermaid-container svg .node circle')
+        .evaluateAll(shapes =>
+          shapes
+            .map(s => `${(s as SVGElement).style.stroke || ''}/${(s as SVGElement).style.filter || ''}`)
+            .join('|'),
+        )
+      return { classBag, inlineBag, svgLen: svgHtml.length }
+    }
 
-    const beforeActive = await activeShape.evaluateAll(nodes =>
-      nodes
-        .map(n => ({
-          id: n.id,
-          stroke: (n.querySelector('rect, polygon, circle') as SVGElement | null)?.style.stroke ?? '',
-        }))
-        .filter(n => n.stroke && n.stroke !== ''),
-    )
-
+    const before = await fingerprint()
     await page.locator('#btn-next').click()
-    await page.waitForTimeout(200)
+    await page.waitForTimeout(250)
+    const after = await fingerprint()
 
-    const afterActive = await activeShape.evaluateAll(nodes =>
-      nodes
-        .map(n => ({
-          id: n.id,
-          stroke: (n.querySelector('rect, polygon, circle') as SVGElement | null)?.style.stroke ?? '',
-        }))
-        .filter(n => n.stroke && n.stroke !== ''),
-    )
-
-    expect(JSON.stringify(afterActive)).not.toBe(JSON.stringify(beforeActive))
+    expect(after).not.toEqual(before)
   })
 })

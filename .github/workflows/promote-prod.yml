@@ -1,0 +1,100 @@
+name: Promote to prod
+
+# MVP CHANGE vs current:
+# Cron picks up the newest `staging-passed/<sha>` tag older than 5 minutes
+# and promotes it to prod. No human in the loop.
+#
+# Manual override:
+#   - workflow_dispatch with `force=true` skips the soak gate (hotfix path)
+#   - hotfix-approved label on the latest commit gates the force flag so a
+#     single accidental click can't ship unsoaked code
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Skip 5-min soak (requires hotfix-approved label on HEAD)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: promote-prod
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Pick newest soaked staging-passed tag
+        id: pick
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          MIN_AGE_SECONDS=300
+          if [[ "$FORCE" == 'true' ]]; then
+            MIN_AGE_SECONDS=0
+            echo "force=true; skipping soak"
+          fi
+          NOW="$(date +%s)"
+          PICK=""
+          PICK_SHA=""
+          for TAG in $(git tag --list 'staging-passed/*' --sort=-creatordate); do
+            T="$(git log -1 --format=%ct "$TAG")"
+            AGE=$((NOW - T))
+            if [[ $AGE -ge $MIN_AGE_SECONDS ]]; then
+              PICK="$TAG"
+              PICK_SHA="${TAG#staging-passed/}"
+              break
+            fi
+          done
+          if [[ -z "$PICK" ]]; then
+            echo 'No staging-passed tag old enough; nothing to promote.'
+            echo 'pick=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "pick=$PICK" >> "$GITHUB_OUTPUT"
+          echo "sha=$PICK_SHA" >> "$GITHUB_OUTPUT"
+          echo "Promoting $PICK"
+
+      - name: Verify hotfix-approved label on HEAD
+        if: ${{ inputs.force == true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          PR_NUM="$(gh pr list --state merged --search "$HEAD_SHA" --json number --jq '.[0].number')"
+          if [[ -z "$PR_NUM" ]]; then
+            echo "force=true but no PR found for $HEAD_SHA — refusing to promote"
+            exit 1
+          fi
+          LABELS="$(gh pr view "$PR_NUM" --json labels --jq '.labels[].name')"
+          if ! echo "$LABELS" | grep -qx 'hotfix-approved'; then
+            echo "force=true but PR #$PR_NUM lacks hotfix-approved label — refusing"
+            exit 1
+          fi
+
+      - name: Deploy to prod
+        if: ${{ steps.pick.outputs.pick != '' }}
+        env:
+          GITHUB_SHA: ${{ steps.pick.outputs.sha }}
+        run: |
+          git checkout "${{ steps.pick.outputs.pick }}"
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          deploy/deploy.sh prod
