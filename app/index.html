@@ -610,7 +610,7 @@
     <!-- INFO PANEL -->
     <aside class="info-panel" aria-live="polite" aria-label="Step details">
       <div>
-        <div class="step-counter">Step <strong id="step-num">1</strong> / <span id="step-total">9</span></div>
+        <div class="step-counter">Step <strong id="step-num">1</strong> / <span id="step-total">12</span></div>
         <div class="step-title-row">
           <h2 class="step-title" id="step-title">Loading…</h2>
           <span class="new-badge hidden" id="new-badge">NEW</span>
@@ -633,7 +633,7 @@
     </div>
     <div class="btn-row">
       <button class="btn" id="btn-prev" aria-label="Previous step">← Prev</button>
-      <span class="step-indicator" id="step-indicator">1 / 9</span>
+      <span class="step-indicator" id="step-indicator">1 / 12</span>
       <button class="btn" id="btn-next" aria-label="Next step">Next →</button>
     </div>
   </footer>
@@ -676,53 +676,91 @@ const STEPS_DATA = {
     },
     {
       "id": "step-3",
-      "nodeId": "C",
-      "title": "Deploy staging",
-      "isNew": false,
-      "description": "Tag triggers deploy-staging. Same mechanism as today, just runs without a human in the loop.",
+      "nodeId": "T",
+      "title": "Deploy test env",
+      "isNew": true,
+      "description": "Immediately after tagging, the artifact is deployed to the test environment. Internal-access only. Each new merge cancels any in-progress test env deploy, keeping the env at tip-of-main.",
       "callouts": [
-        { "type": "change",  "text": "Mechanism unchanged — only trigger is automated" },
-        { "type": "benefit", "text": "Staging always reflects tip of main within ~10 minutes of merge" }
+        { "type": "change",  "text": "NEW — dedicated test env receives every tagged build before staging" },
+        { "type": "change",  "text": "Internal-only access — not customer-facing" },
+        { "type": "benefit", "text": "Staging shielded from raw tip-of-main until E2E passes" },
+        { "type": "benefit", "text": "Deploy failures surface fast on internal env, not on customer-facing staging" }
       ]
     },
     {
       "id": "step-4",
-      "nodeId": "D",
-      "title": "Soak window ≥30 min",
+      "nodeId": "U",
+      "title": "E2E smoke on test",
       "isNew": true,
-      "description": "Image must spend at least 30 minutes on staging without rollback before becoming prod-eligible. Concurrency-grouped to prevent races.",
+      "description": "Playwright E2E smoke suite runs against the test env. Only a green run creates the test-passed tag. Any failure blocks staging promotion without blocking main.",
       "callouts": [
-        { "type": "change",  "text": "NEW — explicit time gate before prod promotion" },
+        { "type": "change",  "text": "NEW — automated E2E gate on test env before staging" },
+        { "type": "benefit", "text": "Regressions caught on internal env, not on customer-facing staging" },
+        { "type": "benefit", "text": "No staging pollution from broken builds" }
+      ]
+    },
+    {
+      "id": "step-5",
+      "nodeId": "V",
+      "title": "test-passed tag",
+      "isNew": true,
+      "description": "On green E2E, a test-passed/<sha> tag is created. This is the immutable gate signal that authorises staging promotion. Traceable across Sentry, audit logs, and monitoring.",
+      "callouts": [
+        { "type": "change",  "text": "NEW — explicit one-way gate signal between test and staging" },
+        { "type": "benefit", "text": "Full audit trail: every staging deploy traceable to a passing E2E run" },
+        { "type": "benefit", "text": "Tag outlives 90-day workflow log retention" }
+      ]
+    },
+    {
+      "id": "step-6",
+      "nodeId": "C",
+      "title": "Deploy staging",
+      "isNew": false,
+      "description": "Staging deploy is now gated by the test-passed tag. Only builds that passed E2E on test reach staging. Same deploy mechanism, trigger is the tag gate rather than an inline pipeline step.",
+      "callouts": [
+        { "type": "change",  "text": "Trigger changed: deploy only after test-passed tag created" },
+        { "type": "benefit", "text": "Staging always reflects E2E-verified code" }
+      ]
+    },
+    {
+      "id": "step-7",
+      "nodeId": "D",
+      "title": "E2E smoke / Soak ≥30 min",
+      "isNew": true,
+      "description": "After staging deploy, a smoke suite confirms the deployment is healthy. The image must also spend at least 30 minutes on staging without rollback before becoming prod-eligible. Concurrency-grouped to prevent races.",
+      "callouts": [
+        { "type": "change",  "text": "NEW — E2E smoke on staging confirms deploy health before soak clock starts" },
+        { "type": "change",  "text": "NEW — explicit 30-min time gate before prod promotion" },
         { "type": "benefit", "text": "Sentry signal latency catches bad releases pre-prod" },
         { "type": "benefit", "text": "First real promotion gate Megaport has ever had" }
       ]
     },
     {
-      "id": "step-5",
+      "id": "step-8",
       "nodeId": "E",
       "title": "Cron promote prod",
       "isNew": true,
-      "description": "Scheduled at 10:00 and 14:00 AET. Picks newest staging-passed/<sha> tag with ≥30 min soak. Hotfix bypass available via workflow_dispatch with hotfix-approved label.",
+      "description": "Scheduled at 10:00 and 14:00 AET. Picks newest staging-passed/<sha> tag with ≥30 min soak. Hotfix bypass: workflow_dispatch + hotfix-approved label skips the soak wait — hotfix still runs through test env and staging.",
       "callouts": [
         { "type": "change",  "text": "NEW — twice-daily cadence instead of every merge" },
-        { "type": "change",  "text": "Hotfix path: workflow_dispatch + hotfix-approved label = <15 min to prod" },
+        { "type": "change",  "text": "Hotfix path: workflow_dispatch + hotfix-approved label — bypasses soak wait only, still goes through test and staging" },
         { "type": "benefit", "text": "CDN cache stays stable — no mid-session bundle re-downloads for users" },
         { "type": "benefit", "text": "Blast radius reduced; bug attribution becomes tractable" }
       ]
     },
     {
-      "id": "step-6",
+      "id": "step-9",
       "nodeId": "F",
       "title": "Deploy prod",
       "isNew": false,
-      "description": "Only images that survived staging soak land here. Same /deploy.py mechanism.",
+      "description": "Only images that survived test E2E, staging smoke, and staging soak land here. Same deploy mechanism.",
       "callouts": [
         { "type": "change",  "text": "Decoupled from tag flow — runs from cron, not inline with staging" },
         { "type": "benefit", "text": "Predictable release windows; ops know when to watch" }
       ]
     },
     {
-      "id": "step-7",
+      "id": "step-10",
       "nodeId": "G",
       "title": "Live (controlled cadence)",
       "isNew": false,
@@ -734,7 +772,7 @@ const STEPS_DATA = {
       ]
     },
     {
-      "id": "step-8",
+      "id": "step-11",
       "nodeId": "H",
       "title": "Self-service rollback",
       "isNew": true,
@@ -749,15 +787,16 @@ const STEPS_DATA = {
       ]
     },
     {
-      "id": "step-9",
+      "id": "step-12",
       "nodeId": "X",
-      "title": "Slack notify on failure",
+      "title": "Slack notify — failure & prod success",
       "isNew": true,
-      "description": "Any failed workflow_run on main posts a Slack DM to the commit author within ~2 minutes, with link to the workflow log.",
+      "description": "Any failed workflow_run on main posts a Slack alert to the release channel within ~2 minutes. Successful prod promotions post a :rocket: confirmation. Both include a link to the workflow log.",
       "callouts": [
-        { "type": "change",  "text": "NEW — author lookup via commit.author.email + Slack webhook" },
+        { "type": "change",  "text": "NEW — failure alert: author lookup via commit.author.email + Slack webhook" },
+        { "type": "change",  "text": "NEW — success notification posted when prod promotion completes" },
         { "type": "benefit", "text": "Failures surface to the right person within minutes, not at standup the next day" },
-        { "type": "benefit", "text": "PR-author signal improves over time as patterns emerge" }
+        { "type": "benefit", "text": "Success notification closes the loop: team knows what is live and when" }
       ]
     }
   ]
@@ -898,25 +937,32 @@ const DIAGRAM_SRC = [
   'flowchart TD',
   '  A["PR merged - CI green"]',
   '  B["Auto-release tag"]:::new',
+  '  T["Deploy test env"]:::new',
+  '  U["E2E smoke on test"]:::new',
+  '  V["test-passed tag"]:::new',
   '  C["Deploy staging"]',
-  '  D["Soak >=30 min"]:::new',
+  '  D["E2E smoke / Soak >=30 min"]:::new',
   '  E["Cron promote prod"]:::new',
   '  F["Deploy prod"]',
   '  G["Live"]',
   '  H["Self-service rollback"]:::new',
-  '  X["Slack notify on failure"]:::new',
+  '  X["Slack notify"]:::new',
   '  A --> B',
-  '  B --> C',
+  '  B --> T',
+  '  T --> U',
+  '  U --> V',
+  '  V --> C',
   '  C --> D',
   '  D --> E',
   '  E --> F',
   '  F --> G',
-  '  A -. hotfix .-> E',
+  '  D -. hotfix .-> E',
   '  G -. dispatch .-> H',
   '  H -. swap .-> F',
   '  B -. fail .-> X',
   '  C -. fail .-> X',
   '  E -. fail .-> X',
+  '  E -. success .-> X',
   '  classDef new fill:#0d2820,stroke:#10b981,stroke-width:1.5px,color:#a7e6c8'
 ].join('\n');
 

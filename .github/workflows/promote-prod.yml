@@ -1,11 +1,15 @@
 name: Promote to prod
 
 # MVP CHANGE vs current:
-# Cron picks up the newest `staging-passed/<sha>` tag older than 5 minutes
+# Cron picks up the newest `staging-passed/<sha>` tag older than 30 minutes
 # and promotes it to prod. No human in the loop.
+#
+# The staging-passed tag is only created after E2E smoke tests pass on staging,
+# so every promoted build has passed: test env E2E → staging smoke → 30 min soak.
 #
 # Manual override:
 #   - workflow_dispatch with `force=true` skips the soak gate (hotfix path)
+#   - hotfix still runs through test env and staging — only the 30-min wait is skipped
 #   - hotfix-approved label on the latest commit gates the force flag so a
 #     single accidental click can't ship unsoaked code
 
@@ -45,7 +49,7 @@ jobs:
           FORCE: ${{ inputs.force }}
         run: |
           set -euo pipefail
-          MIN_AGE_SECONDS=300
+          MIN_AGE_SECONDS=1800
           if [[ "$FORCE" == 'true' ]]; then
             MIN_AGE_SECONDS=0
             echo "force=true; skipping soak"
