@@ -6,7 +6,7 @@ name: Slack notify on failure
 
 on:
   workflow_run:
-    workflows: ['CI', 'Release + deploy staging', 'Promote to prod', 'Rollback']
+    workflows: ['Pipeline', 'Promote to prod', 'Rollback']
     types: [completed]
 
 jobs:
