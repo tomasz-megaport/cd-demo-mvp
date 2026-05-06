@@ -541,20 +541,10 @@
   #worker {
     position: absolute;
     pointer-events: none;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    line-height: 1.4;
-    color: var(--accent);
-    text-shadow: 0 0 8px var(--accent-glow);
     z-index: 10;
     transition: top 0.35s ease, left 0.35s ease;
-    white-space: pre;
     display: none;
-  }
-  .wf {
-    position: absolute;
-    top: 0; left: 0;
-    opacity: 0;
+    image-rendering: pixelated;
   }
 
   /* ── RESPONSIVE ──────────────────────────────────────────── */
@@ -625,11 +615,7 @@
     <!-- DIAGRAM -->
     <div class="diagram-pane" aria-label="Pipeline diagram">
       <div id="mermaid-container"></div>
-      <div id="worker" aria-hidden="true">
-        <span class="wf"></span>
-        <span class="wf"></span>
-        <span class="wf"></span>
-      </div>
+      <canvas id="worker" aria-hidden="true" width="80" height="80"></canvas>
     </div>
 
     <!-- INFO PANEL -->
@@ -1070,29 +1056,113 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); goTo(currentStep - 1); }
 });
 
-// ── WORKER ANIMATION ─────────────────────────────────────────────────────────
-const WORKER_FRAMES = [
-  '⚒ o\n  |\n / \\',   // hammer raised
-  '  o\n ⚒|\n / \\',   // hammer at shoulder
-  '  o\n  |\n /⚒\\'    // hammer striking
+// ── WORKER SPRITE ANIMATION ───────────────────────────────────────────────────
+// Sprite: 1998×1090, 2 rows × 545px each.
+// Row 0 (top):    4 frames — use these for animation.
+// Row 1 (bottom): 5 frames.
+// Background is solid grey (~215,218,217) — chroma-keyed out on load.
+// Frame widths vary; we track content bounds per frame for centering.
+
+const SPRITE_SRC    = 'worker-sprite.png';
+const SPRITE_W      = 1998;
+const SPRITE_H      = 1090;
+const FRAME_H       = 545;           // half of total height
+const FRAME_ROWS    = [
+  { y: 0,   count: 4 },             // top row — used for animation
 ];
+const DISPLAY_SIZE  = 80;            // canvas px (square)
+const BG_COLOR      = [215, 218, 217];
+const BG_TOLERANCE  = 35;
+const FRAME_MS      = 180;           // ms per frame
+
+let workerFrames  = [];              // { sx, sy, sw, sh, contentX, contentW }
+let workerSrc     = null;            // offscreen canvas with transparent bg
+let workerFrame   = 0;
+let workerTimer   = null;
+
+function chromaKey(imageData) {
+  const [br, bg, bb] = BG_COLOR;
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (Math.abs(d[i]-br) < BG_TOLERANCE &&
+        Math.abs(d[i+1]-bg) < BG_TOLERANCE &&
+        Math.abs(d[i+2]-bb) < BG_TOLERANCE) {
+      d[i+3] = 0;
+    }
+  }
+  return imageData;
+}
+
+function detectContentBounds(ctx, sx, sy, sw, sh) {
+  const d = ctx.getImageData(sx, sy, sw, sh).data;
+  let minX = sw, maxX = 0;
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      if (d[(y * sw + x) * 4 + 3] > 10) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+      }
+    }
+  }
+  if (minX > maxX) return { contentX: 0, contentW: sw };
+  return { contentX: minX, contentW: maxX - minX + 1 };
+}
 
 function initWorker() {
-  const spans = document.querySelectorAll('#worker .wf');
-  spans.forEach((s, i) => { s.textContent = WORKER_FRAMES[i]; });
-  let idx = 0;
-  spans[idx].style.opacity = '1';
-  setInterval(() => {
-    spans[idx].style.opacity = '0';
-    idx = (idx + 1) % spans.length;
-    spans[idx].style.opacity = '1';
-  }, 250);
+  const img = new Image();
+  img.onload = () => {
+    // Draw to offscreen canvas + chroma key
+    const oc = document.createElement('canvas');
+    oc.width = SPRITE_W; oc.height = SPRITE_H;
+    const octx = oc.getContext('2d');
+    octx.drawImage(img, 0, 0);
+    const id = octx.getImageData(0, 0, SPRITE_W, SPRITE_H);
+    octx.putImageData(chromaKey(id), 0, 0);
+    workerSrc = oc;
+
+    // Detect frames from first row
+    const row = FRAME_ROWS[0];
+    const fw = Math.floor(SPRITE_W / row.count);
+    workerFrames = [];
+    for (let i = 0; i < row.count; i++) {
+      const sx = i * fw;
+      const { contentX, contentW } = detectContentBounds(octx, sx, row.y, fw, FRAME_H);
+      workerFrames.push({ sx, sy: row.y, sw: fw, sh: FRAME_H, contentX, contentW });
+    }
+
+    // Start animation loop
+    if (workerTimer) clearInterval(workerTimer);
+    workerTimer = setInterval(drawWorkerFrame, FRAME_MS);
+    drawWorkerFrame();
+  };
+  img.src = SPRITE_SRC;
+}
+
+function drawWorkerFrame() {
+  const canvas = document.getElementById('worker');
+  if (!canvas || !workerSrc || !workerFrames.length) return;
+  const ctx = canvas.getContext('2d');
+  const f = workerFrames[workerFrame];
+  workerFrame = (workerFrame + 1) % workerFrames.length;
+
+  ctx.clearRect(0, 0, DISPLAY_SIZE, DISPLAY_SIZE);
+
+  // Scale to fit height, center horizontally on content bounds
+  const scale = DISPLAY_SIZE / f.sh;
+  const dw = Math.round(f.contentW * scale);
+  const dh = DISPLAY_SIZE;
+  const dx = Math.round((DISPLAY_SIZE - dw) / 2);
+
+  ctx.drawImage(workerSrc,
+    f.sx + f.contentX, f.sy, f.contentW, f.sh,   // source: content crop
+    dx, 0, dw, dh                                  // dest: centered in canvas
+  );
 }
 
 function positionWorker(nodeId) {
   const worker = document.getElementById('worker');
-  const svg = document.querySelector('#mermaid-container svg');
-  const pane = document.querySelector('.diagram-pane');
+  const svg    = document.querySelector('#mermaid-container svg');
+  const pane   = document.querySelector('.diagram-pane');
   if (!worker || !svg || !pane) return;
 
   const node = svg.querySelector(`[id*="flowchart-${nodeId}-"]`) ||
@@ -1103,8 +1173,8 @@ function positionWorker(nodeId) {
   const nodeRect = node.getBoundingClientRect();
 
   worker.style.display = 'block';
-  worker.style.left = (nodeRect.right - paneRect.left + 10) + 'px';
-  worker.style.top  = (nodeRect.top  - paneRect.top  + nodeRect.height / 2 - 26) + 'px';
+  worker.style.left = (nodeRect.right - paneRect.left + 6) + 'px';
+  worker.style.top  = (nodeRect.top - paneRect.top + nodeRect.height / 2 - DISPLAY_SIZE / 2) + 'px';
 }
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────
