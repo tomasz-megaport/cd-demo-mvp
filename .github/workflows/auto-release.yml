@@ -28,7 +28,9 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # PAT used so the tag push triggers deploy-staging.yml
+          # (default GITHUB_TOKEN-pushed tags don't trigger workflows).
+          token: ${{ secrets.CICD_PAT }}
 
       - name: Compute and push tag
         id: tag
