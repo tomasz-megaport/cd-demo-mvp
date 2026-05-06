@@ -48,5 +48,7 @@ deploy/deploy.sh staging --dry-run
 
 ## Sibling demos
 
-- **Current state:** [`cd-demo-current`](../cd-demo-current) — fully manual, every release is a click
-- **Ideal target:** [`cd-demo-ideal`](../cd-demo-ideal) — full test→staging→prod gating + flake quarantine + admin dashboard
+- **Current state:** [cd-demo-current](https://tomasz-megaport.github.io/cd-demo-current/) — fully manual, every release is a click
+- **Ideal target:** [cd-demo-ideal](https://tomasz-megaport.github.io/cd-demo-ideal/) — full test→staging→prod gating + flake quarantine + admin dashboard
+
+This demo: <https://tomasz-megaport.github.io/cd-demo-mvp/>
