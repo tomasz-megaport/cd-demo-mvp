@@ -1057,105 +1057,80 @@ document.addEventListener('keydown', e => {
 });
 
 // ── WORKER SPRITE ANIMATION ───────────────────────────────────────────────────
-// Sprite: 1998×1090, 2 rows × 545px each.
-// Row 0 (top):    4 frames — use these for animation.
-// Row 1 (bottom): 5 frames.
-// Background is solid grey (~215,218,217) — chroma-keyed out on load.
-// Frame widths vary; we track content bounds per frame for centering.
+// Sprite: 2048×2048, 2 cols × 2 rows = 4 frames, each 1024×1024, transparent bg.
+// Frames: [0,0] [1024,0] [0,1024] [1024,1024]
 
-const SPRITE_SRC    = 'worker-sprite.png';
-const SPRITE_W      = 1998;
-const SPRITE_H      = 1090;
-const FRAME_H       = 545;           // half of total height
-const FRAME_ROWS    = [
-  { y: 0,   count: 4 },             // top row — used for animation
+const SPRITE_FRAME_W = 1024;
+const SPRITE_FRAME_H = 1024;
+const DISPLAY_SIZE   = 100;    // canvas px
+const FRAME_MS       = 200;    // ms per frame
+
+const FRAME_COORDS = [
+  { sx: 0,    sy: 0    },
+  { sx: 1024, sy: 0    },
+  { sx: 0,    sy: 1024 },
+  { sx: 1024, sy: 1024 },
 ];
-const DISPLAY_SIZE  = 80;            // canvas px (square)
-const BG_COLOR      = [215, 218, 217];
-const BG_TOLERANCE  = 35;
-const FRAME_MS      = 180;           // ms per frame
 
-let workerFrames  = [];              // { sx, sy, sw, sh, contentX, contentW }
-let workerSrc     = null;            // offscreen canvas with transparent bg
-let workerFrame   = 0;
-let workerTimer   = null;
+let workerImg    = null;
+let workerFrame  = 0;
+let workerTimer  = null;
+// Content bounds per frame (detected once on load for tight centering)
+let workerBounds = [];
 
-function chromaKey(imageData) {
-  const [br, bg, bb] = BG_COLOR;
-  const d = imageData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    if (Math.abs(d[i]-br) < BG_TOLERANCE &&
-        Math.abs(d[i+1]-bg) < BG_TOLERANCE &&
-        Math.abs(d[i+2]-bb) < BG_TOLERANCE) {
-      d[i+3] = 0;
-    }
-  }
-  return imageData;
-}
-
-function detectContentBounds(ctx, sx, sy, sw, sh) {
+function detectBounds(ctx, sx, sy, sw, sh) {
   const d = ctx.getImageData(sx, sy, sw, sh).data;
-  let minX = sw, maxX = 0;
+  let x0 = sw, x1 = 0, y0 = sh, y1 = 0;
   for (let y = 0; y < sh; y++) {
     for (let x = 0; x < sw; x++) {
-      if (d[(y * sw + x) * 4 + 3] > 10) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
+      if (d[(y * sw + x) * 4 + 3] > 8) {
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
       }
     }
   }
-  if (minX > maxX) return { contentX: 0, contentW: sw };
-  return { contentX: minX, contentW: maxX - minX + 1 };
+  return x1 > x0 ? { x: x0, y: y0, w: x1-x0+1, h: y1-y0+1 } : { x: 0, y: 0, w: sw, h: sh };
 }
 
 function initWorker() {
   const img = new Image();
   img.onload = () => {
-    // Draw to offscreen canvas + chroma key
+    // Detect per-frame content bounds using offscreen canvas
     const oc = document.createElement('canvas');
-    oc.width = SPRITE_W; oc.height = SPRITE_H;
+    oc.width = img.width; oc.height = img.height;
     const octx = oc.getContext('2d');
     octx.drawImage(img, 0, 0);
-    const id = octx.getImageData(0, 0, SPRITE_W, SPRITE_H);
-    octx.putImageData(chromaKey(id), 0, 0);
-    workerSrc = oc;
-
-    // Detect frames from first row
-    const row = FRAME_ROWS[0];
-    const fw = Math.floor(SPRITE_W / row.count);
-    workerFrames = [];
-    for (let i = 0; i < row.count; i++) {
-      const sx = i * fw;
-      const { contentX, contentW } = detectContentBounds(octx, sx, row.y, fw, FRAME_H);
-      workerFrames.push({ sx, sy: row.y, sw: fw, sh: FRAME_H, contentX, contentW });
-    }
-
-    // Start animation loop
+    workerImg = img;
+    workerBounds = FRAME_COORDS.map(f =>
+      detectBounds(octx, f.sx, f.sy, SPRITE_FRAME_W, SPRITE_FRAME_H)
+    );
     if (workerTimer) clearInterval(workerTimer);
     workerTimer = setInterval(drawWorkerFrame, FRAME_MS);
     drawWorkerFrame();
   };
-  img.src = SPRITE_SRC;
+  img.src = 'worker-sprite.png';
 }
 
 function drawWorkerFrame() {
   const canvas = document.getElementById('worker');
-  if (!canvas || !workerSrc || !workerFrames.length) return;
+  if (!canvas || !workerImg) return;
   const ctx = canvas.getContext('2d');
-  const f = workerFrames[workerFrame];
-  workerFrame = (workerFrame + 1) % workerFrames.length;
+  const fc  = FRAME_COORDS[workerFrame];
+  const b   = workerBounds[workerFrame] || { x: 0, y: 0, w: SPRITE_FRAME_W, h: SPRITE_FRAME_H };
+  workerFrame = (workerFrame + 1) % FRAME_COORDS.length;
 
   ctx.clearRect(0, 0, DISPLAY_SIZE, DISPLAY_SIZE);
 
-  // Scale to fit height, center horizontally on content bounds
-  const scale = DISPLAY_SIZE / f.sh;
-  const dw = Math.round(f.contentW * scale);
-  const dh = DISPLAY_SIZE;
+  // Scale to fit DISPLAY_SIZE, preserve aspect, center
+  const scale = Math.min(DISPLAY_SIZE / b.w, DISPLAY_SIZE / b.h);
+  const dw = Math.round(b.w * scale);
+  const dh = Math.round(b.h * scale);
   const dx = Math.round((DISPLAY_SIZE - dw) / 2);
+  const dy = Math.round((DISPLAY_SIZE - dh) / 2);
 
-  ctx.drawImage(workerSrc,
-    f.sx + f.contentX, f.sy, f.contentW, f.sh,   // source: content crop
-    dx, 0, dw, dh                                  // dest: centered in canvas
+  ctx.drawImage(workerImg,
+    fc.sx + b.x, fc.sy + b.y, b.w, b.h,
+    dx, dy, dw, dh
   );
 }
 
