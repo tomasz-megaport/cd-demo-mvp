@@ -19,14 +19,17 @@ Open the GitHub Pages site for the interactive walkthrough — Mermaid diagram +
 
 ## Pipelines
 
-| Workflow | Trigger | What it does |
+One workflow per phase. Intra-phase steps are jobs in a single file; phase boundaries are crossed via tags so external systems (Sentry, audit logs, monitoring) can subscribe to the same artifact identifier.
+
+| Workflow | Trigger | Phase |
 |---|---|---|
-| `ci.yml` | push / PR to `main` | lint + smoke test |
-| `auto-release.yml` | `workflow_run` on CI success | bumps + pushes tag |
-| `deploy-staging.yml` | tag push (`v*.*.*`) | deploys to staging, marks `staging-passed/<sha>` |
-| `promote-prod.yml` | cron `*/10` + `workflow_dispatch` | promotes newest `staging-passed/<sha>` ≥5min old |
-| `notify.yml` | `workflow_run` on any failure | Slack ping with run URL |
-| `rollback.yml` | `workflow_dispatch` | force-pushes env branch to previous artifact |
+| `ci.yml` | push / PR to `main` | CI: lint + smoke test |
+| `release-and-deploy-staging.yml` | `workflow_run` on CI green on main | Release + staging: bump tag → deploy staging → tag `staging-passed/<sha>` |
+| `promote-prod.yml` | cron `*/10` + `workflow_dispatch` | Prod: promotes newest soaked `staging-passed/<sha>` (≥5min old) |
+| `notify.yml` | `workflow_run` failure on any of above | Slack ping with run URL |
+| `rollback.yml` | `workflow_dispatch` | Force-pushes env branch to previous artifact |
+
+Why phase-based not single-DAG: tags (`v*.*.*`, `staging-passed/<sha>`) are immutable artifact identifiers consumed by external systems and outlive 90-day workflow run retention. Phase decomposition keeps the contract clean. Within a phase, jobs use `needs:` — no PAT required there. Cron-poll on `staging-passed/*` (no push trigger) means no PAT needed for the staging→prod boundary either.
 
 ## Required secrets
 

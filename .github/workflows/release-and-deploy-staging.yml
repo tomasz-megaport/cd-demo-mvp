@@ -1,0 +1,72 @@
+name: Release + deploy staging
+
+# MVP CHANGE vs current:
+# One workflow per phase. CI is its own phase (ci.yml). This workflow is
+# the "release + staging" phase: triggered by green CI on main, it bumps
+# the release tag, deploys to staging, and tags `staging-passed/<sha>` so
+# the next phase (promote-prod cron) has something to soak.
+#
+# Phases stay decoupled across the tag boundary; intra-phase steps run as
+# jobs in this single file. No cross-workflow tag-trigger needed inside a
+# phase, so no PAT is required here — `staging-passed/*` is consumed by a
+# cron poller, not a push:tags trigger.
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: release-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release-and-deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compute and push release tag
+        id: tag
+        run: |
+          set -euo pipefail
+          LAST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -1)"
+          LAST="${LAST_TAG:-v0.0.0}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${LAST#v}"
+          PATCH=$((PATCH + 1))
+          NEW="v${MAJOR}.${MINOR}.${PATCH}"
+          SHA="$(git rev-parse --short HEAD)"
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          git tag "$NEW"
+          git push origin "$NEW"
+          echo "tag=$NEW" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Released $NEW @ $SHA"
+
+      - name: Deploy to staging
+        env:
+          GITHUB_SHA: ${{ steps.tag.outputs.sha }}
+        run: deploy/deploy.sh staging
+
+      - name: Tag staging-passed
+        env:
+          SHA: ${{ steps.tag.outputs.sha }}
+        run: |
+          TAG="staging-passed/$SHA"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "Marked $TAG"
