@@ -725,7 +725,7 @@ const STEPS_DATA = {
     {
       "id": "step-7",
       "nodeId": "D",
-      "title": "E2E smoke / Soak ≥30 min",
+      "title": "E2E sanity check",
       "isNew": true,
       "description": "After staging deploy, a smoke suite confirms the deployment is healthy. The image must also spend at least 30 minutes on staging without rollback before becoming prod-eligible. Concurrency-grouped to prevent races.",
       "callouts": [
@@ -946,7 +946,7 @@ const DIAGRAM_SRC = [
   '  U["E2E smoke on test"]:::new',
   '  V["test-passed tag"]:::new',
   '  C["Deploy staging"]',
-  '  D["E2E smoke / Soak >=30 min"]:::new',
+  '  D["E2E sanity check"]:::new',
   '  E["Cron promote prod"]:::new',
   '  F["Deploy prod"]',
   '  G["Live"]',
