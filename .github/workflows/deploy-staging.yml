@@ -1,0 +1,65 @@
+name: Deploy staging
+
+# MVP CHANGE vs current:
+# Triggered by tag push (from auto-release.yml). Deploys to staging only —
+# prod is gated behind soak window. Posts a `staging-passed/<sha>` tag once
+# smoke passes against the staging URL, which promote-prod consumes.
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.sha.outputs.short }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve sha
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
+        env:
+          GITHUB_SHA: ${{ steps.sha.outputs.short }}
+        run: |
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          deploy/deploy.sh staging
+
+  soak-and-mark:
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mark staging-passed
+        env:
+          SHA: ${{ needs.deploy.outputs.sha }}
+        run: |
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          TAG="staging-passed/$SHA"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "Marked $TAG"

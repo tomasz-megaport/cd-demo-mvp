@@ -21,12 +21,12 @@ Open the GitHub Pages site for the interactive walkthrough — Mermaid diagram +
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `pipeline.yml` | push / PR to `main` | single DAG: ci → tag (`v*.*.*`) → deploy_staging → mark_staging_passed |
+| `ci.yml` | push / PR to `main` | lint + smoke test |
+| `auto-release.yml` | `workflow_run` on CI success | bumps + pushes tag |
+| `deploy-staging.yml` | tag push (`v*.*.*`) | deploys to staging, marks `staging-passed/<sha>` |
 | `promote-prod.yml` | cron `*/10` + `workflow_dispatch` | promotes newest `staging-passed/<sha>` ≥5min old |
-| `notify.yml` | `workflow_run` on Pipeline / Promote / Rollback failure | Slack ping with run URL |
+| `notify.yml` | `workflow_run` on any failure | Slack ping with run URL |
 | `rollback.yml` | `workflow_dispatch` | force-pushes env branch to previous artifact |
-
-Single pipeline file = single Actions run page shows the whole graph at once. No PAT required (cross-workflow tag triggers avoided).
 
 ## Required secrets
 
