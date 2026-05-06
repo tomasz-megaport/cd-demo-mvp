@@ -60,6 +60,7 @@ jobs:
       - name: Deploy to staging
         env:
           GITHUB_SHA: ${{ steps.tag.outputs.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: deploy/deploy.sh staging
 
       - name: Tag staging-passed
