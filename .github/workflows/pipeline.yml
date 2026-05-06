@@ -1,0 +1,118 @@
+name: Pipeline
+
+# MVP pipeline as a single DAG:
+#   ci → tag → deploy_staging → mark_staging_passed
+#
+# Tags (v*.*.*, staging-passed/<sha>) are still created for audit + so
+# promote-prod.yml's cron has something to read. But the chain itself is
+# job-to-job (`needs:`) — no cross-workflow tag-trigger plumbing, no PAT.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate version.json
+        run: node -e "JSON.parse(require('fs').readFileSync('app/version.json','utf8'))"
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Smoke test
+        run: pnpm test:smoke
+
+  tag:
+    needs: ci
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.new }}
+      sha: ${{ steps.tag.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: tag
+        run: |
+          set -euo pipefail
+          LAST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -1)"
+          LAST="${LAST_TAG:-v0.0.0}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${LAST#v}"
+          PATCH=$((PATCH + 1))
+          NEW="v${MAJOR}.${MINOR}.${PATCH}"
+          SHA="$(git rev-parse --short HEAD)"
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          git tag "$NEW"
+          git push origin "$NEW"
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Tagged $NEW @ $SHA"
+
+  deploy_staging:
+    needs: tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy
+        env:
+          GITHUB_SHA: ${{ needs.tag.outputs.sha }}
+        run: |
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          deploy/deploy.sh staging
+
+  mark_staging_passed:
+    needs: [tag, deploy_staging]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag staging-passed
+        env:
+          SHA: ${{ needs.tag.outputs.sha }}
+        run: |
+          TAG="staging-passed/$SHA"
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "Marked $TAG"
