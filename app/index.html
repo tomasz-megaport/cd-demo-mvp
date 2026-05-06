@@ -740,9 +740,9 @@ const STEPS_DATA = {
       "nodeId": "E",
       "title": "Cron promote prod",
       "isNew": true,
-      "description": "Scheduled at 10:00 and 14:00 AET. Picks newest staging-passed/<sha> tag with ≥30 min soak. Hotfix bypass: workflow_dispatch + hotfix-approved label skips the soak wait — hotfix still runs through test env and staging.",
+      "description": "Runs every minute. Picks newest staging-passed/<sha> tag with ≥30 min soak. Hotfix bypass: workflow_dispatch + hotfix-approved label skips the soak wait — hotfix still runs through test env and staging.",
       "callouts": [
-        { "type": "change",  "text": "NEW — twice-daily cadence instead of every merge" },
+        { "type": "change",  "text": "NEW — cron every minute picks up soaked staging-passed tags" },
         { "type": "change",  "text": "Hotfix path: workflow_dispatch + hotfix-approved label — bypasses soak wait only, still goes through test and staging" },
         { "type": "benefit", "text": "CDN cache stays stable — no mid-session bundle re-downloads for users" },
         { "type": "benefit", "text": "Blast radius reduced; bug attribution becomes tractable" }
