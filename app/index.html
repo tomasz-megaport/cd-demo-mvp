@@ -144,7 +144,7 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
-    overflow: hidden;
+    overflow: visible;
     position: relative;
   }
 
@@ -1079,17 +1079,25 @@ let workerTimer  = null;
 let workerBounds = [];
 
 function detectBounds(ctx, sx, sy, sw, sh) {
+  const step = 8;
   const d = ctx.getImageData(sx, sy, sw, sh).data;
   let x0 = sw, x1 = 0, y0 = sh, y1 = 0;
-  for (let y = 0; y < sh; y++) {
-    for (let x = 0; x < sw; x++) {
+  for (let y = 0; y < sh; y += step) {
+    for (let x = 0; x < sw; x += step) {
       if (d[(y * sw + x) * 4 + 3] > 8) {
         if (x < x0) x0 = x; if (x > x1) x1 = x;
         if (y < y0) y0 = y; if (y > y1) y1 = y;
       }
     }
   }
-  return x1 > x0 ? { x: x0, y: y0, w: x1-x0+1, h: y1-y0+1 } : { x: 0, y: 0, w: sw, h: sh };
+  if (x1 <= x0) return { x: 0, y: 0, w: sw, h: sh };
+  // expand by step so we don't clip edges
+  return {
+    x: Math.max(0, x0 - step),
+    y: Math.max(0, y0 - step),
+    w: Math.min(sw, x1 + step * 2) - Math.max(0, x0 - step),
+    h: Math.min(sh, y1 + step * 2) - Math.max(0, y0 - step),
+  };
 }
 
 function initWorker() {
@@ -1108,6 +1116,7 @@ function initWorker() {
     workerTimer = setInterval(drawWorkerFrame, FRAME_MS);
     drawWorkerFrame();
   };
+  img.onerror = () => console.error('worker-sprite.png failed to load');
   img.src = 'worker-sprite.png';
 }
 
