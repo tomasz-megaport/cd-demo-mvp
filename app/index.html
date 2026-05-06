@@ -537,6 +537,26 @@
     stroke-dasharray: 5 4 !important;
   }
 
+  /* ── WORKER ANIMATION ───────────────────────────────────── */
+  #worker {
+    position: absolute;
+    pointer-events: none;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--accent);
+    text-shadow: 0 0 8px var(--accent-glow);
+    z-index: 10;
+    transition: top 0.35s ease, left 0.35s ease;
+    white-space: pre;
+    display: none;
+  }
+  .wf {
+    position: absolute;
+    top: 0; left: 0;
+    opacity: 0;
+  }
+
   /* ── RESPONSIVE ──────────────────────────────────────────── */
   @media (max-width: 768px) {
     html, body { overflow: auto; }
@@ -605,6 +625,11 @@
     <!-- DIAGRAM -->
     <div class="diagram-pane" aria-label="Pipeline diagram">
       <div id="mermaid-container"></div>
+      <div id="worker" aria-hidden="true">
+        <span class="wf"></span>
+        <span class="wf"></span>
+        <span class="wf"></span>
+      </div>
     </div>
 
     <!-- INFO PANEL -->
@@ -894,6 +919,7 @@ function renderStep(idx) {
 
   // Highlight active node in diagram
   highlightNode(step.nodeId);
+  positionWorker(step.nodeId);
 }
 
 // ── NODE HIGHLIGHT ──────────────────────────────────────────────────────────
@@ -1044,8 +1070,45 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); goTo(currentStep - 1); }
 });
 
+// ── WORKER ANIMATION ─────────────────────────────────────────────────────────
+const WORKER_FRAMES = [
+  '⚒ o\n  |\n / \\',   // hammer raised
+  '  o\n ⚒|\n / \\',   // hammer at shoulder
+  '  o\n  |\n /⚒\\'    // hammer striking
+];
+
+function initWorker() {
+  const spans = document.querySelectorAll('#worker .wf');
+  spans.forEach((s, i) => { s.textContent = WORKER_FRAMES[i]; });
+  let idx = 0;
+  spans[idx].style.opacity = '1';
+  setInterval(() => {
+    spans[idx].style.opacity = '0';
+    idx = (idx + 1) % spans.length;
+    spans[idx].style.opacity = '1';
+  }, 250);
+}
+
+function positionWorker(nodeId) {
+  const worker = document.getElementById('worker');
+  const svg = document.querySelector('#mermaid-container svg');
+  const pane = document.querySelector('.diagram-pane');
+  if (!worker || !svg || !pane) return;
+
+  const node = svg.querySelector(`[id*="flowchart-${nodeId}-"]`) ||
+               svg.querySelector(`#flowchart-${nodeId}`);
+  if (!node) { worker.style.display = 'none'; return; }
+
+  const paneRect = pane.getBoundingClientRect();
+  const nodeRect = node.getBoundingClientRect();
+
+  worker.style.display = 'block';
+  worker.style.left = (nodeRect.right - paneRect.left + 10) + 'px';
+  worker.style.top  = (nodeRect.top  - paneRect.top  + nodeRect.height / 2 - 26) + 'px';
+}
+
 // ── BOOT ─────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', initDiagram);
+window.addEventListener('DOMContentLoaded', () => { initDiagram(); initWorker(); });
 </script>
 </body>
 </html>
