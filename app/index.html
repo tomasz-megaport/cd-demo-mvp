@@ -616,7 +616,7 @@
     <!-- DIAGRAM -->
     <div class="diagram-pane" aria-label="Pipeline diagram">
       <div id="mermaid-container"></div>
-      <canvas id="worker" aria-hidden="true" width="80" height="80"></canvas>
+      <canvas id="worker" aria-hidden="true" width="50" height="50"></canvas>
     </div>
 
     <!-- INFO PANEL -->
@@ -1058,13 +1058,14 @@ document.addEventListener('keydown', e => {
 });
 
 // ── WORKER SPRITE ANIMATION ───────────────────────────────────────────────────
-// Sprite: 2048×2048, 2 cols × 2 rows = 4 frames, each 1024×1024, transparent bg.
-// Frames: [0,0] [1024,0] [0,1024] [1024,1024]
+// Sprite: 2048×2048, 2 cols × 2 rows = 4 frames, each 1024×1024, black bg.
+// Queue: new worker added every 30 s; resets when active step changes.
 
 const SPRITE_FRAME_W = 1024;
 const SPRITE_FRAME_H = 1024;
-const DISPLAY_SIZE   = 100;    // canvas px
+const DISPLAY_SIZE   = 50;     // px per worker
 const FRAME_MS       = 200;    // ms per frame
+const QUEUE_MS       = 30000;  // ms between new worker joins
 
 const FRAME_COORDS = [
   { sx: 0,    sy: 0    },
@@ -1073,11 +1074,13 @@ const FRAME_COORDS = [
   { sx: 1024, sy: 1024 },
 ];
 
-let workerImg    = null;
-let workerFrame  = 0;
-let workerTimer  = null;
-// Content bounds per frame (detected once on load for tight centering)
-let workerBounds = [];
+let workerImg      = null;
+let workerBounds   = [];
+let workerTimer    = null;
+let queueInterval  = null;
+let queueCount     = 1;
+let workerFrames   = [0];      // per-worker frame index (staggered)
+let currentNodeId  = null;
 
 function detectBounds(ctx, sx, sy, sw, sh) {
   const step = 8;
@@ -1093,7 +1096,6 @@ function detectBounds(ctx, sx, sy, sw, sh) {
     }
   }
   if (x1 <= x0) return { x: 0, y: 0, w: sw, h: sh };
-  // expand by step so we don't clip edges
   return {
     x: Math.max(0, x0 - step),
     y: Math.max(0, y0 - step),
@@ -1105,7 +1107,6 @@ function detectBounds(ctx, sx, sy, sw, sh) {
 function initWorker() {
   const img = new Image();
   img.onload = () => {
-    // Detect per-frame content bounds using offscreen canvas
     const oc = document.createElement('canvas');
     oc.width = img.width; oc.height = img.height;
     const octx = oc.getContext('2d');
@@ -1126,23 +1127,38 @@ function drawWorkerFrame() {
   const canvas = document.getElementById('worker');
   if (!canvas || !workerImg) return;
   const ctx = canvas.getContext('2d');
-  const fc  = FRAME_COORDS[workerFrame];
-  const b   = workerBounds[workerFrame] || { x: 0, y: 0, w: SPRITE_FRAME_W, h: SPRITE_FRAME_H };
-  workerFrame = (workerFrame + 1) % FRAME_COORDS.length;
 
-  ctx.clearRect(0, 0, DISPLAY_SIZE, DISPLAY_SIZE);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Scale to fit DISPLAY_SIZE, preserve aspect, center
-  const scale = Math.min(DISPLAY_SIZE / b.w, DISPLAY_SIZE / b.h);
-  const dw = Math.round(b.w * scale);
-  const dh = Math.round(b.h * scale);
-  const dx = Math.round((DISPLAY_SIZE - dw) / 2);
-  const dy = Math.round((DISPLAY_SIZE - dh) / 2);
+  for (let i = 0; i < queueCount; i++) {
+    const fi = workerFrames[i];
+    const fc = FRAME_COORDS[fi];
+    const b  = workerBounds[fi] || { x: 0, y: 0, w: SPRITE_FRAME_W, h: SPRITE_FRAME_H };
+    workerFrames[i] = (fi + 1) % FRAME_COORDS.length;
 
-  ctx.drawImage(workerImg,
-    fc.sx + b.x, fc.sy + b.y, b.w, b.h,
-    dx, dy, dw, dh
-  );
+    const scale = Math.min(DISPLAY_SIZE / b.w, DISPLAY_SIZE / b.h);
+    const dw = Math.round(b.w * scale);
+    const dh = Math.round(b.h * scale);
+    const dx = i * DISPLAY_SIZE + Math.round((DISPLAY_SIZE - dw) / 2);
+    const dy = Math.round((DISPLAY_SIZE - dh) / 2);
+
+    ctx.drawImage(workerImg, fc.sx + b.x, fc.sy + b.y, b.w, b.h, dx, dy, dw, dh);
+  }
+}
+
+function resetQueue() {
+  queueCount = 1;
+  workerFrames = [0];
+  if (queueInterval) clearInterval(queueInterval);
+  queueInterval = setInterval(() => {
+    queueCount++;
+    workerFrames.push((queueCount * 2) % FRAME_COORDS.length); // stagger start frame
+    const canvas = document.getElementById('worker');
+    if (canvas) {
+      canvas.width = queueCount * DISPLAY_SIZE;
+    }
+    positionWorker(currentNodeId);
+  }, QUEUE_MS);
 }
 
 function positionWorker(nodeId) {
@@ -1154,6 +1170,14 @@ function positionWorker(nodeId) {
   const node = svg.querySelector(`[id*="flowchart-${nodeId}-"]`) ||
                svg.querySelector(`#flowchart-${nodeId}`);
   if (!node) { worker.style.display = 'none'; return; }
+
+  if (nodeId !== currentNodeId) {
+    currentNodeId = nodeId;
+    resetQueue();
+  }
+
+  worker.width  = queueCount * DISPLAY_SIZE;
+  worker.height = DISPLAY_SIZE;
 
   const paneRect = pane.getBoundingClientRect();
   const nodeRect = node.getBoundingClientRect();
