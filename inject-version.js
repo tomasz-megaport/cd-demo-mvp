@@ -37,7 +37,13 @@ if (!fs.existsSync(versionPath)) {
 const version = JSON.parse(fs.readFileSync(versionPath, 'utf8'))
 const sha = String(version.sha || 'unknown')
 const env = String(version.env || 'unknown')
-const deployedAt = String(version.deployed_at || new Date().toISOString())
+const rawTs = version.deployed_at ? new Date(version.deployed_at) : new Date()
+const aestParts = new Intl.DateTimeFormat('en-AU', {
+  timeZone: 'Australia/Brisbane',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', hour12: false,
+}).formatToParts(rawTs).reduce((o, p) => { o[p.type] = p.value; return o }, {})
+const deployedAt = `${aestParts.year}-${aestParts.month}-${aestParts.day} ${aestParts.hour}:${aestParts.minute} AEST`
 
 const escape = s => s.replace(/'/g, "\\'")
 
