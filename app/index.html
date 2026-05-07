@@ -545,6 +545,7 @@
     transition: top 0.35s ease, left 0.35s ease;
     display: none;
     image-rendering: pixelated;
+    mix-blend-mode: screen;
   }
 
   /* ── RESPONSIVE ──────────────────────────────────────────── */
@@ -1084,7 +1085,8 @@ function detectBounds(ctx, sx, sy, sw, sh) {
   let x0 = sw, x1 = 0, y0 = sh, y1 = 0;
   for (let y = 0; y < sh; y += step) {
     for (let x = 0; x < sw; x += step) {
-      if (d[(y * sw + x) * 4 + 3] > 8) {
+      const i = (y * sw + x) * 4;
+      if (d[i] > 25 || d[i + 1] > 25 || d[i + 2] > 25) {
         if (x < x0) x0 = x; if (x > x1) x1 = x;
         if (y < y0) y0 = y; if (y > y1) y1 = y;
       }
