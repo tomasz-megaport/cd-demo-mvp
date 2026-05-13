@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MVP CD Flow - Merged at the beginning of demo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:        #0f0f0f;
+    --surface:   #161616;
+    --surface2:  #1e1e1e;
+    --border:    #2a2a2a;
+    --muted:     #5a5a5a;
+    --body:      #b8b8b8;
+    --heading:   #e8e8e8;
+
+    /* MVP palette: optimistic — green for change, blue for benefit */
+    --accent:       #10b981;   /* primary accent (emerald) */
+    --accent-glow:  rgba(16,185,129,0.45);
+    --green:        #10b981;
+    --green-bg:     rgba(16,185,129,0.10);
+    --green-border: rgba(16,185,129,0.25);
+    --blue:         #3b82f6;
+    --blue-bg:      rgba(59,130,246,0.10);
+    --blue-border:  rgba(59,130,246,0.25);
+
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--body);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+
+  /* ── TOP BAR ─────────────────────────────────────────────── */
+  .topbar {
+    height: 48px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    flex-shrink: 0;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .topbar-title {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--heading);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; }
+    50% { opacity: 0.4; }
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .version-banner {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    gap: 10px;
+  }
+  .version-banner span { color: var(--body); }
+
+  .nav-links {
+    display: flex;
+    gap: 4px;
+  }
+  .nav-link {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .nav-link:hover { color: var(--body); border-color: var(--border); }
+  .nav-link.active {
+    color: var(--accent);
+    border-color: var(--green-border);
+    background: var(--green-bg);
+  }
+  .nav-gh { display: inline-flex; align-items: center; padding: 4px 6px; }
+  .nav-gh svg { display: block; }
+
+  /* ── LAYOUT ──────────────────────────────────────────────── */
+  .layout {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 48px);
+  }
+
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── DIAGRAM PANE ────────────────────────────────────────── */
+  .diagram-pane {
+    flex: 0 0 60%;
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    overflow: visible;
+    position: relative;
+  }
+
+  .diagram-pane::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 50%, rgba(16,185,129,0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  #mermaid-container {
+    width: 100%;
+    max-height: 100%;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #mermaid-container svg {
+    max-width: 100%;
+    max-height: calc(100vh - 160px);
+  }
+
+  /* ── INFO PANEL ──────────────────────────────────────────── */
+  .info-panel {
+    flex: 0 0 40%;
+    display: flex;
+    flex-direction: column;
+    padding: 28px 28px 20px;
+    overflow-y: auto;
+    gap: 20px;
+  }
+
+  .step-counter {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .step-counter strong {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .step-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .step-title {
+    font-family: var(--font-sans);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--heading);
+    line-height: 1.3;
+    transition: opacity 0.2s;
+  }
+
+  .new-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    padding: 3px 7px;
+    border-radius: 2px;
+    background: var(--green-bg);
+    color: var(--green);
+    border: 1px solid var(--green-border);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .new-badge.hidden { display: none; }
+
+  .step-description {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--body);
+    transition: opacity 0.2s;
+  }
+
+  .callouts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .callouts-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    line-height: 1.5;
+    font-size: 13px;
+    transition: transform 0.15s, opacity 0.15s;
+    animation: callout-in 0.25s ease backwards;
+  }
+
+  @keyframes callout-in {
+    from { opacity: 0; transform: translateX(8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .callout.change {
+    background: var(--green-bg);
+    border-color: var(--green-border);
+    color: #6ee7b7;
+  }
+  .callout.benefit {
+    background: var(--blue-bg);
+    border-color: var(--blue-border);
+    color: #93c5fd;
+  }
+
+  .callout-chip {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    padding: 2px 6px;
+    border-radius: 2px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .callout.change .callout-chip {
+    background: rgba(16,185,129,0.25);
+    color: var(--green);
+  }
+  .callout.benefit .callout-chip {
+    background: rgba(59,130,246,0.25);
+    color: var(--blue);
+  }
+
+  /* ── ROLLBACK FORM MOCK ──────────────────────────────────── */
+  .rollback-mock {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    overflow: hidden;
+    animation: callout-in 0.3s ease backwards;
+    animation-delay: 80ms;
+  }
+  .rollback-mock-header {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .rollback-mock-icon {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    background: var(--green-bg);
+    border: 1px solid var(--green-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--green);
+    font-size: 9px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+  }
+  .rollback-mock-title {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--heading);
+    font-weight: 500;
+    flex: 1;
+  }
+  .rollback-mock-tag {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+  }
+  .rollback-mock-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .rollback-mock-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .rollback-mock-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .rollback-mock-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 7px 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--body);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: default;
+  }
+  .rollback-mock-select::after {
+    content: '▾';
+    color: var(--muted);
+    font-size: 10px;
+    margin-left: 8px;
+  }
+  .rollback-mock-btn {
+    align-self: flex-start;
+    background: var(--accent);
+    color: #04110b;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    margin-top: 2px;
+    box-shadow: 0 0 0 1px rgba(16,185,129,0.3), 0 2px 8px rgba(16,185,129,0.2);
+  }
+  .rollback-mock-btn:hover {
+    filter: brightness(1.08);
+  }
+
+  /* ── BOTTOM CONTROLS ─────────────────────────────────────── */
+  .controls {
+    height: 72px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 24px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .progress-bar-wrap {
+    width: 320px;
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.35s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 0 0 6px var(--accent-glow);
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .btn {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    padding: 7px 20px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--body);
+    cursor: pointer;
+    transition: all 0.15s;
+    outline: none;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--surface);
+    border-color: var(--muted);
+    color: var(--heading);
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .step-indicator {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 50px;
+    text-align: center;
+  }
+
+  /* ── MERMAID OVERRIDES ───────────────────────────────────── */
+  #mermaid-container .node {
+    cursor: pointer;
+  }
+
+  /* baseline node — calmer steel-blue/grey, "we're improving" */
+  #mermaid-container .node rect,
+  #mermaid-container .node circle,
+  #mermaid-container .node polygon {
+    fill: #1a1f24 !important;
+    stroke: #3a4550 !important;
+    stroke-width: 1.5px !important;
+    transition: filter 0.15s, fill 0.2s, stroke 0.2s;
+  }
+
+  /* "new" nodes — subtle green tint to signal automation */
+  #mermaid-container .node.new rect,
+  #mermaid-container .node.new circle,
+  #mermaid-container .node.new polygon {
+    fill: rgba(16,185,129,0.08) !important;
+    stroke: rgba(16,185,129,0.5) !important;
+    stroke-width: 1.5px !important;
+  }
+
+  /* active node — full emerald glow */
+  #mermaid-container .node.active rect,
+  #mermaid-container .node.active circle,
+  #mermaid-container .node.active polygon {
+    fill: rgba(16,185,129,0.18) !important;
+    stroke: var(--accent) !important;
+    stroke-width: 2px !important;
+    filter: drop-shadow(0 0 10px var(--accent-glow));
+  }
+
+  #mermaid-container .nodeLabel,
+  #mermaid-container .label {
+    color: #b8b8b8 !important;
+    font-family: var(--font-mono) !important;
+    font-size: 12px !important;
+  }
+
+  #mermaid-container .node.new .nodeLabel,
+  #mermaid-container .node.new .label {
+    color: #a7e6c8 !important;
+  }
+
+  #mermaid-container .node.active .nodeLabel,
+  #mermaid-container .node.active .label {
+    color: #d1fae5 !important;
+    font-weight: 500 !important;
+  }
+
+  #mermaid-container .edgePath .path {
+    stroke: #3a4550 !important;
+    stroke-width: 1.5px !important;
+  }
+
+  #mermaid-container .arrowheadPath {
+    fill: #3a4550 !important;
+    stroke: none !important;
+  }
+
+  /* hotfix dotted edge gets a slightly different tone */
+  #mermaid-container .edgePath.hotfix .path {
+    stroke: #d97706 !important;
+    stroke-dasharray: 5 4 !important;
+  }
+
+  /* ── WORKER ANIMATION ───────────────────────────────────── */
+  #worker {
+    position: absolute;
+    pointer-events: none;
+    z-index: 10;
+    transition: top 0.35s ease, left 0.35s ease;
+    display: none;
+    image-rendering: pixelated;
+    mix-blend-mode: screen;
+  }
+
+  /* ── RESPONSIVE ──────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    html, body { overflow: auto; }
+
+    .layout { height: auto; }
+    .main { flex-direction: column; }
+
+    .diagram-pane {
+      flex: none;
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      padding: 16px;
+      height: 280px;
+    }
+
+    #mermaid-container svg {
+      max-height: 250px;
+    }
+
+    .info-panel {
+      flex: none;
+      width: 100%;
+    }
+
+    .controls { height: auto; padding: 12px; }
+    .progress-bar-wrap { width: 240px; }
+
+    .topbar .version-banner { display: none; }
+    .nav-link { padding: 4px 7px; font-size: 10px; }
+
+    .step-title { font-size: 19px; }
+  }
+</style>
+</head>
+
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="status-dot"></div>
+    <span class="topbar-title">MVP CD Flow - Merged at the beginning of demo</span>
+  </div>
+  <div class="topbar-right">
+    <div class="version-banner">
+      <span>sha:</span><span id="sha-display">—</span>
+      <span>env:</span><span>production</span>
+      <span>deployed:</span><span id="ts-display">—</span>
+    </div>
+    <nav class="nav-links" aria-label="Demo navigation">
+      <a href="https://tomasz-megaport.github.io/cd-demo-current/" class="nav-link">Current</a>
+      <a href="https://tomasz-megaport.github.io/cd-demo-mvp/" class="nav-link active">MVP</a>
+      <a href="https://tomasz-megaport.github.io/cd-demo-ideal/" class="nav-link">Ideal</a>
+      <a href="https://github.com/tomasz-megaport/cd-demo-mvp" class="nav-link nav-gh" target="_blank" rel="noopener" aria-label="Source on GitHub" title="Source on GitHub">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+  <div class="main">
+
+    <!-- DIAGRAM -->
+    <div class="diagram-pane" aria-label="Pipeline diagram">
+      <div id="mermaid-container"></div>
+      <canvas id="worker" aria-hidden="true" width="50" height="50"></canvas>
+    </div>
+
+    <!-- INFO PANEL -->
+    <aside class="info-panel" aria-live="polite" aria-label="Step details">
+      <div>
+        <div class="step-counter">Step <strong id="step-num">1</strong> / <span id="step-total">12</span></div>
+        <div class="step-title-row">
+          <h2 class="step-title" id="step-title">Loading…</h2>
+          <span class="new-badge hidden" id="new-badge">NEW</span>
+        </div>
+      </div>
+      <p class="step-description" id="step-desc"></p>
+      <div class="callouts" id="callouts-container">
+        <div class="callouts-label">What changed &amp; why it helps</div>
+        <div id="callouts-list"></div>
+        <div id="rollback-mock-slot"></div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- CONTROLS -->
+  <footer class="controls">
+    <div class="progress-bar-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="progress-bar" aria-valuenow="11">
+      <div class="progress-bar-fill" id="progress-fill" style="width:11%"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="btn-prev" aria-label="Previous step">← Prev</button>
+      <span class="step-indicator" id="step-indicator">1 / 12</span>
+      <button class="btn" id="btn-next" aria-label="Next step">Next →</button>
+    </div>
+  </footer>
+</div>
+
+<script>
+// ── DATA ───────────────────────────────────────────────────────────────────
+const STEPS_DATA = {
+  "demo": "mvp",
+  "title": "MVP CD Flow - Merged at the beginning of demo",
+  "subtitle": "Silver target — manual click removed, prod cadence controlled, rollback self-service",
+  "callout_types": {
+    "change":  { "label": "CHANGE",  "color": "green" },
+    "benefit": { "label": "BENEFIT", "color": "blue" }
+  },
+  "steps": [
+    {
+      "id": "step-1",
+      "nodeId": "A",
+      "title": "PR merged · CI green",
+      "isNew": false,
+      "description": "Same starting point as today. Difference is what happens next — no human required.",
+      "callouts": [
+        { "type": "change",  "text": "Same as current — entry point unchanged" },
+        { "type": "benefit", "text": "Developer can context-switch immediately, no waiting required" }
+      ]
+    },
+    {
+      "id": "step-2",
+      "nodeId": "B",
+      "title": "Auto-release tag",
+      "isNew": true,
+      "description": "release.yml is triggered by workflow_run on main with conclusion=success. release-it runs unattended, creating tags for every affected project.",
+      "callouts": [
+        { "type": "change",  "text": "NEW — workflow_run trigger replaces manual workflow_dispatch click" },
+        { "type": "change",  "text": "workflow_dispatch retained as escape hatch for emergencies" },
+        { "type": "benefit", "text": "Zero human cost per release — repeated savings across 10–20 daily merges" },
+        { "type": "benefit", "text": "Releases never forgotten; main never piles up" }
+      ]
+    },
+    {
+      "id": "step-3",
+      "nodeId": "T",
+      "title": "Deploy pre-prod",
+      "isNew": true,
+      "description": "Immediately after tagging, the artifact is deployed to the pre-prod environment — a new internal env at tip-of-main. Each new merge cancels any in-progress pre-prod deploy, keeping the env at tip-of-main.",
+      "callouts": [
+        { "type": "change",  "text": "NEW — internal pre-prod env receives every tagged build before sandbox/prod" },
+        { "type": "change",  "text": "Internal-only access — not customer-facing" },
+        { "type": "benefit", "text": "Customer-facing envs shielded from raw tip-of-main until E2E passes" },
+        { "type": "benefit", "text": "Deploy failures surface fast on internal env, not on customer-facing sandbox" }
+      ]
+    },
+    {
+      "id": "step-4",
+      "nodeId": "U",
+      "title": "E2E + smoke on pre-prod",
+      "isNew": true,
+      "description": "Playwright E2E + smoke suite runs against the pre-prod env. Only a green run creates the pre-prod-passed tag. Any failure blocks sandbox/prod promotion without blocking main.",
+      "callouts": [
+        { "type": "change",  "text": "NEW — automated E2E gate on pre-prod before customer-facing envs" },
+        { "type": "benefit", "text": "Regressions caught on internal env, not on customer-facing sandbox/prod" },
+        { "type": "benefit", "text": "First real promotion gate Megaport has ever had" }
+      ]
+    },
+    {
+      "id": "step-5",
+      "nodeId": "V",
+      "title": "pre-prod-passed tag",
+      "isNew": true,
+      "description": "On green E2E, a pre-prod-passed/<sha> tag is created. This is the immutable gate signal that authorises sandbox + prod parallel promotion after soak. Traceable across Sentry, audit logs, monitoring.",
+      "callouts": [
+        { "type": "change",  "text": "NEW — single explicit gate signal between pre-prod and sandbox/prod" },
+        { "type": "benefit", "text": "Full audit trail: every sandbox/prod deploy traceable to a passing E2E run" },
+        { "type": "benefit", "text": "Tag outlives 90-day workflow log retention" }
+      ]
+    },
+    {
+      "id": "step-6",
+      "nodeId": "E",
+      "title": "Cron promote sandbox + prod",
+      "isNew": true,
+      "description": "Cron picks newest pre-prod-passed/<sha> tag with ≥30 min soak and fires two deploy jobs in parallel: one to sandbox, one to prod. Real schedule: 08:00 / 16:00 / 00:00 AEST (every 8h). Demo: every minute for visibility. Hotfix bypass: workflow_dispatch + hotfix-approved label skips soak only.",
+      "callouts": [
+        { "type": "change",  "text": "NEW — 8h cron picks up soaked pre-prod-passed tags (3 deploys per day)" },
+        { "type": "change",  "text": "NEW — sandbox + prod deploy in PARALLEL from same tag" },
+        { "type": "change",  "text": "Hotfix path: workflow_dispatch + hotfix-approved label — bypasses soak only, still goes through pre-prod + E2E" },
+        { "type": "benefit", "text": "CDN cache stays stable — no mid-session bundle re-downloads" },
+        { "type": "benefit", "text": "Blast radius reduced; bug attribution becomes tractable" }
+      ]
+    },
+    {
+      "id": "step-7",
+      "nodeId": "S",
+      "title": "Deploy sandbox",
+      "isNew": true,
+      "description": "Sandbox is the renamed customer-facing rehearsal env (formerly 'staging'). Same image as prod, same window. Sandbox MIRRORS prod exactly — if it lagged or led prod, sandbox would be lying.",
+      "callouts": [
+        { "type": "change",  "text": "Renamed staging → sandbox to make the mirror-prod contract explicit" },
+        { "type": "change",  "text": "Deploys from same pre-prod-passed/<sha> tag as prod, in the same cron window" },
+        { "type": "benefit", "text": "Customer-faithful rehearsal — PMs/support/QA see exactly what customers see" },
+        { "type": "benefit", "text": "No drift between sandbox and prod — they cannot disagree" }
+      ]
+    },
+    {
+      "id": "step-8",
+      "nodeId": "F",
+      "title": "Deploy prod",
+      "isNew": false,
+      "description": "Only images that survived pre-prod E2E + soak land here. Deploys in parallel with sandbox from the same image.",
+      "callouts": [
+        { "type": "change",  "text": "Decoupled from tag flow — runs from cron, parallel with sandbox" },
+        { "type": "benefit", "text": "Predictable release windows; ops know when to watch" }
+      ]
+    },
+    {
+      "id": "step-9",
+      "nodeId": "G",
+      "title": "Live (sandbox = prod)",
+      "isNew": false,
+      "description": "Sandbox and prod are now serving the same new version. Deploys happen at predictable times — 3 windows per day, every 8h. Customers don't experience mid-session churn.",
+      "callouts": [
+        { "type": "change",  "text": "Reaches sandbox + prod via blessed cron path, not on-merge" },
+        { "type": "benefit", "text": "CDN cache stable for hours, not minutes" },
+        { "type": "benefit", "text": "Sentry signal correlated to a specific release window" }
+      ]
+    },
+    {
+      "id": "step-10",
+      "nodeId": "H",
+      "title": "Self-service rollback",
+      "isNew": true,
+      "showRollbackMock": true,
+      "description": "rollback.yml is a workflow_dispatch with three dropdowns: app, env (sandbox or prod), target (sha or 'previous'). Click Run workflow → wraps the existing image-restore primitive that staff engineers already use → traffic flips to previous version in seconds. No blue/green infra needed.",
+      "callouts": [
+        { "type": "change",  "text": "NEW — rollback.yml workflow with form-based UI" },
+        { "type": "change",  "text": "Wraps existing image-restore primitive — no new infra, no blue/green" },
+        { "type": "benefit", "text": "Any FE engineer can rollback sandbox or prod from browser or mobile" },
+        { "type": "benefit", "text": "Old image stays cached — restore is seconds, no rebuild" },
+        { "type": "benefit", "text": "Slack notification on completion confirms success" }
+      ]
+    },
+    {
+      "id": "step-11",
+      "nodeId": "X",
+      "title": "Slack notify — failure & sandbox+prod success",
+      "isNew": true,
+      "description": "Any failed workflow_run on main posts a Slack alert to the release channel within ~2 minutes. Successful sandbox+prod promotions post a :rocket: confirmation. Both include a link to the workflow log.",
+      "callouts": [
+        { "type": "change",  "text": "NEW — failure alert: author lookup via commit.author.email + Slack webhook" },
+        { "type": "change",  "text": "NEW — success notification posted when sandbox+prod promotion completes" },
+        { "type": "benefit", "text": "Failures surface to the right person within minutes, not at standup the next day" },
+        { "type": "benefit", "text": "Success notification closes the loop: team knows what is live and when" }
+      ]
+    }
+  ]
+};
+
+// ── STATE ───────────────────────────────────────────────────────────────────
+// To open the demo on the rollback step (step 8) for screenshot/review, set
+// INITIAL_STEP = 7. Default is 0 (step 1).
+const INITIAL_STEP = 0;
+let currentStep = INITIAL_STEP;
+const steps = STEPS_DATA.steps;
+const total = steps.length;
+
+// ── VERSION BANNER ──────────────────────────────────────────────────────────
+// ── INJECTED VERSION (do not edit by hand) ──
+document.getElementById('sha-display').textContent = '4f7f09811741d3961cc5139f52d34fafba27f3d7';
+(function () {
+  var tsEl = document.getElementById('ts-display');
+  if (tsEl) tsEl.textContent = '2026-05-13 23:03 AEST';
+  var envEl = document.getElementById('env-display');
+  if (envEl) envEl.textContent = 'pre-prod';
+})();
+// ── END INJECTED VERSION ──
+
+// ── ROLLBACK MOCK ───────────────────────────────────────────────────────────
+function buildRollbackMock() {
+  return `
+    <div class="rollback-mock" role="figure" aria-label="GitHub Actions rollback workflow form mock">
+      <div class="rollback-mock-header">
+        <div class="rollback-mock-icon">⚡</div>
+        <div class="rollback-mock-title">Rollback</div>
+        <div class="rollback-mock-tag">workflow_dispatch</div>
+      </div>
+      <div class="rollback-mock-body">
+        <div class="rollback-mock-row">
+          <label class="rollback-mock-label">App</label>
+          <div class="rollback-mock-select">portal</div>
+        </div>
+        <div class="rollback-mock-row">
+          <label class="rollback-mock-label">Env</label>
+          <div class="rollback-mock-select">prod</div>
+        </div>
+        <div class="rollback-mock-row">
+          <label class="rollback-mock-label">Target</label>
+          <div class="rollback-mock-select">previous</div>
+        </div>
+        <button class="rollback-mock-btn" type="button" aria-label="Run rollback workflow (mock)">Run workflow</button>
+      </div>
+    </div>
+  `;
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+function renderStep(idx) {
+  const step = steps[idx];
+
+  // Counter + title + desc
+  document.getElementById('step-num').textContent = idx + 1;
+  document.getElementById('step-total').textContent = total;
+  document.getElementById('step-title').textContent = step.title;
+  document.getElementById('step-desc').textContent = step.description;
+  document.getElementById('step-indicator').textContent = `${idx + 1} / ${total}`;
+
+  // NEW badge
+  const badge = document.getElementById('new-badge');
+  if (step.isNew) badge.classList.remove('hidden');
+  else badge.classList.add('hidden');
+
+  // Progress
+  const pct = Math.round(((idx + 1) / total) * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-bar').setAttribute('aria-valuenow', pct);
+
+  // Callouts
+  const list = document.getElementById('callouts-list');
+  list.innerHTML = '';
+  step.callouts.forEach((c, i) => {
+    const chip = STEPS_DATA.callout_types[c.type];
+    const div = document.createElement('div');
+    div.className = `callout ${c.type}`;
+    div.style.animationDelay = `${i * 60}ms`;
+    div.innerHTML = `<span class="callout-chip">${chip.label}</span><span></span>`;
+    div.querySelector('span:last-child').textContent = c.text;
+    list.appendChild(div);
+  });
+
+  // Rollback mock (only on step 8)
+  const slot = document.getElementById('rollback-mock-slot');
+  slot.innerHTML = step.showRollbackMock ? buildRollbackMock() : '';
+
+  // Buttons
+  document.getElementById('btn-prev').disabled = idx === 0;
+  document.getElementById('btn-next').disabled = idx === total - 1;
+
+  // Highlight active node in diagram
+  highlightNode(step.nodeId);
+  positionWorker(step.nodeId);
+}
+
+// ── NODE HIGHLIGHT ──────────────────────────────────────────────────────────
+function highlightNode(activeNodeId) {
+  const svg = document.querySelector('#mermaid-container svg');
+  if (!svg) return;
+
+  // Reset all nodes
+  const nodes = svg.querySelectorAll('.node');
+  nodes.forEach(node => {
+    node.classList.remove('active');
+  });
+
+  // Find the node by its id attribute (mermaid uses flowchart-{nodeId}-{n})
+  const activeNode = svg.querySelector(`[id*="flowchart-${activeNodeId}-"], #flowchart-${activeNodeId}`);
+  if (activeNode) {
+    activeNode.classList.add('active');
+  }
+}
+
+// ── MERMAID INIT ────────────────────────────────────────────────────────────
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  themeVariables: {
+    background: '#0f0f0f',
+    primaryColor: '#1a1f24',
+    primaryBorderColor: '#3a4550',
+    primaryTextColor: '#b8b8b8',
+    lineColor: '#3a4550',
+    edgeLabelBackground: '#0f0f0f',
+    fontFamily: 'IBM Plex Mono, monospace',
+    fontSize: '12px',
+  },
+  flowchart: {
+    curve: 'monotoneY',
+    useMaxWidth: true,
+    htmlLabels: true,
+  }
+});
+
+// ── DIAGRAM SOURCE ──────────────────────────────────────────────────────────
+// Defined in JS (not HTML) to avoid any whitespace / entity weirdness.
+// Lines must start at column 0 — Mermaid 10 is picky about leading indent.
+const DIAGRAM_SRC = [
+  'flowchart TD',
+  '  A["PR merged - CI green"]',
+  '  B["Auto-release tag"]:::new',
+  '  T["Deploy pre-prod"]:::new',
+  '  U["E2E + smoke on pre-prod"]:::new',
+  '  V["pre-prod-passed tag"]:::new',
+  '  E["Cron promote sandbox + prod"]:::new',
+  '  S["Deploy sandbox"]:::new',
+  '  F["Deploy prod"]',
+  '  G["Live (sandbox = prod)"]',
+  '  H["Self-service rollback"]:::new',
+  '  X["Slack notify"]:::new',
+  '  A --> B',
+  '  B --> T',
+  '  T --> U',
+  '  U --> V',
+  '  V --> E',
+  '  E --> S',
+  '  E --> F',
+  '  S --> G',
+  '  F --> G',
+
+  '  G -. dispatch .-> H',
+  '  H -. restore .-> F',
+  '  H -. restore .-> S',
+  '  B -. fail .-> X',
+  '  T -. fail .-> X',
+  '  U -. fail .-> X',
+  '  E -. fail .-> X',
+  '  E -. success .-> X',
+  '  classDef new fill:#0d2820,stroke:#10b981,stroke-width:1.5px,color:#a7e6c8'
+].join('\n');
+
+async function initDiagram() {
+  try {
+    const { svg } = await mermaid.render('pipeline-svg', DIAGRAM_SRC);
+    document.getElementById('mermaid-container').innerHTML = svg;
+
+    // After render, apply initial highlight and bind click handlers
+    setTimeout(() => {
+      renderStep(currentStep);
+      bindNodeClicks();
+    }, 50);
+  } catch(e) {
+    console.error('Mermaid render error:', e);
+    document.getElementById('mermaid-container').innerHTML =
+      '<div style="color:#888;font-family:monospace;font-size:12px;padding:20px;text-align:center;">' +
+      'Diagram failed to render.<br/><br/>' +
+      '<span style="color:#666;font-size:11px;">' +
+      ((e && e.message) ? e.message.replace(/</g,'&lt;') : 'unknown error') +
+      '</span></div>';
+    renderStep(currentStep);
+  }
+}
+
+// ── NODE CLICK BINDING ────────────────────────────────────────────────────────
+function bindNodeClicks() {
+  const svg = document.querySelector('#mermaid-container svg');
+  if (!svg) return;
+
+  // Build a map of nodeId -> step index
+  const nodeToStep = {};
+  steps.forEach((s, i) => { nodeToStep[s.nodeId] = i; });
+
+  svg.querySelectorAll('.node').forEach(node => {
+    const matchedId = Object.keys(nodeToStep).find(id =>
+      (node.id && node.id.includes('flowchart-' + id + '-')) || node.id === 'flowchart-' + id
+    );
+    if (matchedId === undefined) return;
+
+    node.style.cursor = 'pointer';
+
+    // Hover shimmer
+    node.addEventListener('mouseenter', () => {
+      if (steps[currentStep].nodeId === matchedId) return;
+      const shape = node.querySelector('rect, circle, polygon');
+      if (shape) shape.style.filter = 'brightness(1.4)';
+    });
+    node.addEventListener('mouseleave', () => {
+      if (steps[currentStep].nodeId === matchedId) return;
+      const shape = node.querySelector('rect, circle, polygon');
+      if (shape) shape.style.filter = '';
+    });
+
+    node.addEventListener('click', () => {
+      const idx = nodeToStep[matchedId];
+      if (idx !== undefined) goTo(idx);
+    });
+  });
+}
+
+// ── NAVIGATION ──────────────────────────────────────────────────────────────
+function goTo(idx) {
+  if (idx < 0 || idx >= total) return;
+  currentStep = idx;
+  renderStep(currentStep);
+}
+
+document.getElementById('btn-prev').addEventListener('click', () => goTo(currentStep - 1));
+document.getElementById('btn-next').addEventListener('click', () => goTo(currentStep + 1));
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); goTo(currentStep + 1); }
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); goTo(currentStep - 1); }
+});
+
+// ── WORKER SPRITE ANIMATION ───────────────────────────────────────────────────
+// Sprite: 2048×2048, 2 cols × 2 rows = 4 frames, each 1024×1024, black bg.
+// Queue: new worker added every 30 s; resets when active step changes.
+
+const SPRITE_FRAME_W = 1024;
+const SPRITE_FRAME_H = 1024;
+const DISPLAY_SIZE   = 50;     // px per worker
+const FRAME_MS       = 200;    // ms per frame
+const QUEUE_MS       = 30000;  // ms between new worker joins
+
+const FRAME_COORDS = [
+  { sx: 0,    sy: 0    },
+  { sx: 1024, sy: 0    },
+  { sx: 0,    sy: 1024 },
+  { sx: 1024, sy: 1024 },
+];
+
+let workerImg      = null;
+let workerBounds   = [];
+let workerTimer    = null;
+let queueInterval  = null;
+let queueCount     = 1;
+let workerFrames   = [0];      // per-worker frame index (staggered)
+let currentNodeId  = null;
+
+function detectBounds(ctx, sx, sy, sw, sh) {
+  const step = 8;
+  const d = ctx.getImageData(sx, sy, sw, sh).data;
+  let x0 = sw, x1 = 0, y0 = sh, y1 = 0;
+  for (let y = 0; y < sh; y += step) {
+    for (let x = 0; x < sw; x += step) {
+      const i = (y * sw + x) * 4;
+      if (d[i] > 25 || d[i + 1] > 25 || d[i + 2] > 25) {
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+  }
+  if (x1 <= x0) return { x: 0, y: 0, w: sw, h: sh };
+  return {
+    x: Math.max(0, x0 - step),
+    y: Math.max(0, y0 - step),
+    w: Math.min(sw, x1 + step * 2) - Math.max(0, x0 - step),
+    h: Math.min(sh, y1 + step * 2) - Math.max(0, y0 - step),
+  };
+}
+
+function initWorker() {
+  const img = new Image();
+  img.onload = () => {
+    const oc = document.createElement('canvas');
+    oc.width = img.width; oc.height = img.height;
+    const octx = oc.getContext('2d');
+    octx.drawImage(img, 0, 0);
+    workerImg = img;
+    workerBounds = FRAME_COORDS.map(f =>
+      detectBounds(octx, f.sx, f.sy, SPRITE_FRAME_W, SPRITE_FRAME_H)
+    );
+    if (workerTimer) clearInterval(workerTimer);
+    workerTimer = setInterval(drawWorkerFrame, FRAME_MS);
+    drawWorkerFrame();
+  };
+  img.onerror = () => console.error('worker-sprite.png failed to load');
+  img.src = 'worker-sprite.png';
+}
+
+function drawWorkerFrame() {
+  const canvas = document.getElementById('worker');
+  if (!canvas || !workerImg) return;
+  const ctx = canvas.getContext('2d');
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < queueCount; i++) {
+    const fi = workerFrames[i];
+    const fc = FRAME_COORDS[fi];
+    const b  = workerBounds[fi] || { x: 0, y: 0, w: SPRITE_FRAME_W, h: SPRITE_FRAME_H };
+    workerFrames[i] = (fi + 1) % FRAME_COORDS.length;
+
+    const scale = Math.min(DISPLAY_SIZE / b.w, DISPLAY_SIZE / b.h);
+    const dw = Math.round(b.w * scale);
+    const dh = Math.round(b.h * scale);
+    const dx = i * DISPLAY_SIZE + Math.round((DISPLAY_SIZE - dw) / 2);
+    const dy = Math.round((DISPLAY_SIZE - dh) / 2);
+
+    ctx.drawImage(workerImg, fc.sx + b.x, fc.sy + b.y, b.w, b.h, dx, dy, dw, dh);
+  }
+}
+
+function resetQueue() {
+  queueCount = 1;
+  workerFrames = [0];
+  if (queueInterval) clearInterval(queueInterval);
+  queueInterval = setInterval(() => {
+    queueCount++;
+    workerFrames.push((queueCount * 2) % FRAME_COORDS.length); // stagger start frame
+    const canvas = document.getElementById('worker');
+    if (canvas) {
+      canvas.width = queueCount * DISPLAY_SIZE;
+    }
+    positionWorker(currentNodeId);
+  }, QUEUE_MS);
+}
+
+function positionWorker(nodeId) {
+  const worker = document.getElementById('worker');
+  const svg    = document.querySelector('#mermaid-container svg');
+  const pane   = document.querySelector('.diagram-pane');
+  if (!worker || !svg || !pane) return;
+
+  const node = svg.querySelector(`[id*="flowchart-${nodeId}-"]`) ||
+               svg.querySelector(`#flowchart-${nodeId}`);
+  if (!node) { worker.style.display = 'none'; return; }
+
+  if (nodeId !== currentNodeId) {
+    currentNodeId = nodeId;
+    resetQueue();
+  }
+
+  worker.width  = queueCount * DISPLAY_SIZE;
+  worker.height = DISPLAY_SIZE;
+
+  const paneRect = pane.getBoundingClientRect();
+  const nodeRect = node.getBoundingClientRect();
+
+  worker.style.display = 'block';
+  worker.style.left = (nodeRect.right - paneRect.left + 6) + 'px';
+  worker.style.top  = (nodeRect.top - paneRect.top + nodeRect.height / 2 - DISPLAY_SIZE / 2) + 'px';
+}
+
+// ── BOOT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', initDiagram);
+</script>
+</body>
+</html>
