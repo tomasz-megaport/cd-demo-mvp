@@ -7,7 +7,7 @@ name: Slack notify
 
 on:
   workflow_run:
-    workflows: ['Pipeline', 'Promote to prod', 'Rollback']
+    workflows: ['Pipeline', 'Promote to sandbox+prod', 'Rollback']
     types: [completed]
 
 jobs:
@@ -42,7 +42,7 @@ jobs:
   notify-prod-success:
     if: >
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.name == 'Promote to prod'
+      github.event.workflow_run.name == 'Promote to sandbox+prod'
     runs-on: ubuntu-latest
     steps:
       - name: Post prod success to Slack
@@ -57,9 +57,9 @@ jobs:
           fi
           PAYLOAD=$(cat <<JSON
           {
-            "text": ":rocket: *Prod promotion succeeded* (\`${SHA:0:7}\`)",
+            "text": ":rocket: *Sandbox+prod promotion succeeded* (\`${SHA:0:7}\`)",
             "blocks": [
-              { "type": "section", "text": { "type": "mrkdwn", "text": ":rocket: *Prod promotion succeeded* (\`${SHA:0:7}\`)" }},
+              { "type": "section", "text": { "type": "mrkdwn", "text": ":rocket: *Sandbox+prod promotion succeeded* (\`${SHA:0:7}\`)" }},
               { "type": "section", "text": { "type": "mrkdwn", "text": "<${URL}|View run>" }}
             ]
           }

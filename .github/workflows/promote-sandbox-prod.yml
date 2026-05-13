@@ -1,0 +1,157 @@
+name: Promote to sandbox+prod
+
+# MVP CHANGE vs current:
+# Cron picks up the newest `pre-prod-passed/<sha>` tag older than the soak
+# window and promotes it to **sandbox AND prod in parallel**. No human in
+# the loop.
+#
+# Sandbox = customer-facing rehearsal env. It MIRRORS prod exactly — same
+# image, same cron window. The point of sandbox is for PMs/support/QA to
+# see what customers will see; if sandbox lagged or led prod, sandbox would
+# be lying.
+#
+# Real cron: `0 22,6,14 * * *` UTC = 08:00 / 16:00 / 00:00 AEST (every 8h).
+# Demo cron: `* * * * *` for visibility while clicking through the walkthrough.
+#
+# The pre-prod-passed tag is only created after E2E + smoke on pre-prod,
+# so every promoted build has passed: pre-prod env E2E → soak window.
+#
+# Manual override:
+#   - workflow_dispatch with `force=true` skips the soak gate (hotfix path)
+#   - hotfix still runs through pre-prod and E2E — only the cron wait is skipped
+#   - hotfix-approved label on the latest commit gates the force flag so a
+#     single accidental click can't ship unsoaked code
+#
+# Rollback path: see rollback.yml — wraps the existing image-restore primitive,
+# completes in seconds. No blue/green infra needed.
+
+on:
+  schedule:
+    - cron: '* * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Skip soak wait (requires hotfix-approved label on HEAD)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: promote-sandbox-prod
+  cancel-in-progress: false
+
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pick: ${{ steps.pick.outputs.pick }}
+      sha: ${{ steps.pick.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pick newest soaked pre-prod-passed tag
+        id: pick
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          MIN_AGE_SECONDS=1800
+          if [[ "$FORCE" == 'true' ]]; then
+            MIN_AGE_SECONDS=0
+            echo "force=true; skipping soak"
+          fi
+          NOW="$(date +%s)"
+          PICK=""
+          PICK_SHA=""
+          for TAG in $(git tag --list 'pre-prod-passed/*' --sort=-creatordate); do
+            T="$(git log -1 --format=%ct "$TAG")"
+            AGE=$((NOW - T))
+            if [[ $AGE -ge $MIN_AGE_SECONDS ]]; then
+              PICK="$TAG"
+              PICK_SHA="${TAG#pre-prod-passed/}"
+              break
+            fi
+          done
+          if [[ -z "$PICK" ]]; then
+            echo 'No pre-prod-passed tag old enough; nothing to promote.'
+            echo 'pick=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "pick=$PICK" >> "$GITHUB_OUTPUT"
+          echo "sha=$PICK_SHA" >> "$GITHUB_OUTPUT"
+          echo "Promoting $PICK to sandbox+prod in parallel"
+
+      - name: Verify hotfix-approved label on HEAD
+        if: ${{ inputs.force == true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          PR_NUM="$(gh pr list --state merged --search "$HEAD_SHA" --json number --jq '.[0].number')"
+          if [[ -z "$PR_NUM" ]]; then
+            echo "force=true but no PR found for $HEAD_SHA — refusing to promote"
+            exit 1
+          fi
+          LABELS="$(gh pr view "$PR_NUM" --json labels --jq '.labels[].name')"
+          if ! echo "$LABELS" | grep -qx 'hotfix-approved'; then
+            echo "force=true but PR #$PR_NUM lacks hotfix-approved label — refusing"
+            exit 1
+          fi
+
+  deploy_sandbox:
+    needs: pick
+    if: ${{ needs.pick.outputs.pick != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy to sandbox
+        env:
+          GITHUB_SHA: ${{ needs.pick.outputs.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git checkout "${{ needs.pick.outputs.pick }}"
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          deploy/deploy.sh sandbox
+
+  deploy_prod:
+    needs: pick
+    if: ${{ needs.pick.outputs.pick != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy to prod
+        env:
+          GITHUB_SHA: ${{ needs.pick.outputs.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git checkout "${{ needs.pick.outputs.pick }}"
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          deploy/deploy.sh prod

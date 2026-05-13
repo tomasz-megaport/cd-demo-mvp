@@ -689,124 +689,114 @@ const STEPS_DATA = {
     {
       "id": "step-3",
       "nodeId": "T",
-      "title": "Deploy test env",
+      "title": "Deploy pre-prod",
       "isNew": true,
-      "description": "Immediately after tagging, the artifact is deployed to the test environment. Internal-access only. Each new merge cancels any in-progress test env deploy, keeping the env at tip-of-main.",
+      "description": "Immediately after tagging, the artifact is deployed to the pre-prod environment — a new internal env at tip-of-main. Each new merge cancels any in-progress pre-prod deploy, keeping the env at tip-of-main.",
       "callouts": [
-        { "type": "change",  "text": "NEW — dedicated test env receives every tagged build before staging" },
+        { "type": "change",  "text": "NEW — internal pre-prod env receives every tagged build before sandbox/prod" },
         { "type": "change",  "text": "Internal-only access — not customer-facing" },
-        { "type": "benefit", "text": "Staging shielded from raw tip-of-main until E2E passes" },
-        { "type": "benefit", "text": "Deploy failures surface fast on internal env, not on customer-facing staging" }
+        { "type": "benefit", "text": "Customer-facing envs shielded from raw tip-of-main until E2E passes" },
+        { "type": "benefit", "text": "Deploy failures surface fast on internal env, not on customer-facing sandbox" }
       ]
     },
     {
       "id": "step-4",
       "nodeId": "U",
-      "title": "E2E smoke on test",
+      "title": "E2E + smoke on pre-prod",
       "isNew": true,
-      "description": "Playwright E2E smoke suite runs against the test env. Only a green run creates the test-passed tag. Any failure blocks staging promotion without blocking main.",
+      "description": "Playwright E2E + smoke suite runs against the pre-prod env. Only a green run creates the pre-prod-passed tag. Any failure blocks sandbox/prod promotion without blocking main.",
       "callouts": [
-        { "type": "change",  "text": "NEW — automated E2E gate on test env before staging" },
-        { "type": "benefit", "text": "Regressions caught on internal env, not on customer-facing staging" },
-        { "type": "benefit", "text": "No staging pollution from broken builds" }
+        { "type": "change",  "text": "NEW — automated E2E gate on pre-prod before customer-facing envs" },
+        { "type": "benefit", "text": "Regressions caught on internal env, not on customer-facing sandbox/prod" },
+        { "type": "benefit", "text": "First real promotion gate Megaport has ever had" }
       ]
     },
     {
       "id": "step-5",
       "nodeId": "V",
-      "title": "test-passed tag",
+      "title": "pre-prod-passed tag",
       "isNew": true,
-      "description": "On green E2E, a test-passed/<sha> tag is created. This is the immutable gate signal that authorises staging promotion. Traceable across Sentry, audit logs, and monitoring.",
+      "description": "On green E2E, a pre-prod-passed/<sha> tag is created. This is the immutable gate signal that authorises sandbox + prod parallel promotion after soak. Traceable across Sentry, audit logs, monitoring.",
       "callouts": [
-        { "type": "change",  "text": "NEW — explicit one-way gate signal between test and staging" },
-        { "type": "benefit", "text": "Full audit trail: every staging deploy traceable to a passing E2E run" },
+        { "type": "change",  "text": "NEW — single explicit gate signal between pre-prod and sandbox/prod" },
+        { "type": "benefit", "text": "Full audit trail: every sandbox/prod deploy traceable to a passing E2E run" },
         { "type": "benefit", "text": "Tag outlives 90-day workflow log retention" }
       ]
     },
     {
       "id": "step-6",
-      "nodeId": "C",
-      "title": "Deploy staging",
-      "isNew": false,
-      "description": "Staging deploy is now gated by the test-passed tag. Only builds that passed E2E on test reach staging. Same deploy mechanism, trigger is the tag gate rather than an inline pipeline step.",
-      "callouts": [
-        { "type": "change",  "text": "Trigger changed: deploy only after test-passed tag created" },
-        { "type": "benefit", "text": "Staging always reflects E2E-verified code" }
-      ]
-    },
-    {
-      "id": "step-7",
-      "nodeId": "D",
-      "title": "E2E sanity check",
-      "isNew": true,
-      "description": "After staging deploy, a smoke suite confirms the deployment is healthy. The image must also spend at least 30 minutes on staging without rollback before becoming prod-eligible. Concurrency-grouped to prevent races.",
-      "callouts": [
-        { "type": "change",  "text": "NEW — E2E smoke on staging confirms deploy health before soak clock starts" },
-        { "type": "change",  "text": "NEW — explicit 30-min time gate before prod promotion" },
-        { "type": "benefit", "text": "Sentry signal latency catches bad releases pre-prod" },
-        { "type": "benefit", "text": "First real promotion gate Megaport has ever had" }
-      ]
-    },
-    {
-      "id": "step-8",
       "nodeId": "E",
-      "title": "Cron promote prod",
+      "title": "Cron promote sandbox + prod",
       "isNew": true,
-      "description": "Runs every minute. Picks newest staging-passed/<sha> tag with ≥30 min soak. Hotfix bypass: workflow_dispatch + hotfix-approved label skips the soak wait — hotfix still runs through test env and staging.",
+      "description": "Cron picks newest pre-prod-passed/<sha> tag with ≥30 min soak and fires two deploy jobs in parallel: one to sandbox, one to prod. Real schedule: 08:00 / 16:00 / 00:00 AEST (every 8h). Demo: every minute for visibility. Hotfix bypass: workflow_dispatch + hotfix-approved label skips soak only.",
       "callouts": [
-        { "type": "change",  "text": "NEW — cron every minute picks up soaked staging-passed tags" },
-        { "type": "change",  "text": "Hotfix path: workflow_dispatch + hotfix-approved label — bypasses soak wait only, still goes through test and staging" },
-        { "type": "benefit", "text": "CDN cache stays stable — no mid-session bundle re-downloads for users" },
+        { "type": "change",  "text": "NEW — 8h cron picks up soaked pre-prod-passed tags (3 deploys per day)" },
+        { "type": "change",  "text": "NEW — sandbox + prod deploy in PARALLEL from same tag" },
+        { "type": "change",  "text": "Hotfix path: workflow_dispatch + hotfix-approved label — bypasses soak only, still goes through pre-prod + E2E" },
+        { "type": "benefit", "text": "CDN cache stays stable — no mid-session bundle re-downloads" },
         { "type": "benefit", "text": "Blast radius reduced; bug attribution becomes tractable" }
       ]
     },
     {
-      "id": "step-9",
+      "id": "step-7",
+      "nodeId": "S",
+      "title": "Deploy sandbox",
+      "isNew": true,
+      "description": "Sandbox is the renamed customer-facing rehearsal env (formerly 'staging'). Same image as prod, same window. Sandbox MIRRORS prod exactly — if it lagged or led prod, sandbox would be lying.",
+      "callouts": [
+        { "type": "change",  "text": "Renamed staging → sandbox to make the mirror-prod contract explicit" },
+        { "type": "change",  "text": "Deploys from same pre-prod-passed/<sha> tag as prod, in the same cron window" },
+        { "type": "benefit", "text": "Customer-faithful rehearsal — PMs/support/QA see exactly what customers see" },
+        { "type": "benefit", "text": "No drift between sandbox and prod — they cannot disagree" }
+      ]
+    },
+    {
+      "id": "step-8",
       "nodeId": "F",
       "title": "Deploy prod",
       "isNew": false,
-      "description": "Only images that survived test E2E, staging smoke, and staging soak land here. Same deploy mechanism.",
+      "description": "Only images that survived pre-prod E2E + soak land here. Deploys in parallel with sandbox from the same image.",
       "callouts": [
-        { "type": "change",  "text": "Decoupled from tag flow — runs from cron, not inline with staging" },
+        { "type": "change",  "text": "Decoupled from tag flow — runs from cron, parallel with sandbox" },
         { "type": "benefit", "text": "Predictable release windows; ops know when to watch" }
       ]
     },
     {
-      "id": "step-10",
+      "id": "step-9",
       "nodeId": "G",
-      "title": "Live (controlled cadence)",
+      "title": "Live (sandbox = prod)",
       "isNew": false,
-      "description": "Prod is now serving the new version. Deploys happen at predictable times. Customers don't experience mid-session churn.",
+      "description": "Sandbox and prod are now serving the same new version. Deploys happen at predictable times — 3 windows per day, every 8h. Customers don't experience mid-session churn.",
       "callouts": [
-        { "type": "change",  "text": "Reaches prod via blessed cron path, not on-merge" },
+        { "type": "change",  "text": "Reaches sandbox + prod via blessed cron path, not on-merge" },
         { "type": "benefit", "text": "CDN cache stable for hours, not minutes" },
-        { "type": "benefit", "text": "Sentry signal can be correlated to a specific release window" }
+        { "type": "benefit", "text": "Sentry signal correlated to a specific release window" }
       ]
     },
     {
-      "id": "step-11",
+      "id": "step-10",
       "nodeId": "H",
       "title": "Self-service rollback",
       "isNew": true,
       "showRollbackMock": true,
-      "description": "rollback.yml is a workflow_dispatch with three dropdowns: app, env, target (sha or 'previous'). Click Run workflow → kubectl patches the k8s Service selector → traffic flips to previous version in <30s.",
+      "description": "rollback.yml is a workflow_dispatch with three dropdowns: app, env (sandbox or prod), target (sha or 'previous'). Click Run workflow → wraps the existing image-restore primitive that staff engineers already use → traffic flips to previous version in seconds. No blue/green infra needed.",
       "callouts": [
         { "type": "change",  "text": "NEW — rollback.yml workflow with form-based UI" },
-        { "type": "change",  "text": "Form hides kubectl entirely — dropdowns only" },
-        { "type": "benefit", "text": "Any FE engineer can rollback prod from browser or mobile" },
-        { "type": "benefit", "text": "Old pods stay warm — rollback is instant, no image pull, no restart" },
+        { "type": "change",  "text": "Wraps existing image-restore primitive — no new infra, no blue/green" },
+        { "type": "benefit", "text": "Any FE engineer can rollback sandbox or prod from browser or mobile" },
+        { "type": "benefit", "text": "Old image stays cached — restore is seconds, no rebuild" },
         { "type": "benefit", "text": "Slack notification on completion confirms success" }
       ]
     },
     {
-      "id": "step-12",
+      "id": "step-11",
       "nodeId": "X",
-      "title": "Slack notify — failure & prod success",
+      "title": "Slack notify — failure & sandbox+prod success",
       "isNew": true,
-      "description": "Any failed workflow_run on main posts a Slack alert to the release channel within ~2 minutes. Successful prod promotions post a :rocket: confirmation. Both include a link to the workflow log.",
+      "description": "Any failed workflow_run on main posts a Slack alert to the release channel within ~2 minutes. Successful sandbox+prod promotions post a :rocket: confirmation. Both include a link to the workflow log.",
       "callouts": [
         { "type": "change",  "text": "NEW — failure alert: author lookup via commit.author.email + Slack webhook" },
-        { "type": "change",  "text": "NEW — success notification posted when prod promotion completes" },
+        { "type": "change",  "text": "NEW — success notification posted when sandbox+prod promotion completes" },
         { "type": "benefit", "text": "Failures surface to the right person within minutes, not at standup the next day" },
         { "type": "benefit", "text": "Success notification closes the loop: team knows what is live and when" }
       ]
@@ -850,7 +840,7 @@ function buildRollbackMock() {
         </div>
         <div class="rollback-mock-row">
           <label class="rollback-mock-label">Env</label>
-          <div class="rollback-mock-select">production</div>
+          <div class="rollback-mock-select">prod</div>
         </div>
         <div class="rollback-mock-row">
           <label class="rollback-mock-label">Target</label>
@@ -955,30 +945,31 @@ const DIAGRAM_SRC = [
   'flowchart TD',
   '  A["PR merged - CI green"]',
   '  B["Auto-release tag"]:::new',
-  '  T["Deploy test env"]:::new',
-  '  U["E2E smoke on test"]:::new',
-  '  V["test-passed tag"]:::new',
-  '  C["Deploy staging"]',
-  '  D["E2E sanity check"]:::new',
-  '  E["Cron promote prod"]:::new',
+  '  T["Deploy pre-prod"]:::new',
+  '  U["E2E + smoke on pre-prod"]:::new',
+  '  V["pre-prod-passed tag"]:::new',
+  '  E["Cron promote sandbox + prod"]:::new',
+  '  S["Deploy sandbox"]:::new',
   '  F["Deploy prod"]',
-  '  G["Live"]',
+  '  G["Live (sandbox = prod)"]',
   '  H["Self-service rollback"]:::new',
   '  X["Slack notify"]:::new',
   '  A --> B',
   '  B --> T',
   '  T --> U',
   '  U --> V',
-  '  V --> C',
-  '  C --> D',
-  '  D --> E',
+  '  V --> E',
+  '  E --> S',
   '  E --> F',
+  '  S --> G',
   '  F --> G',
 
   '  G -. dispatch .-> H',
-  '  H -. swap .-> F',
+  '  H -. restore .-> F',
+  '  H -. restore .-> S',
   '  B -. fail .-> X',
-  '  C -. fail .-> X',
+  '  T -. fail .-> X',
+  '  U -. fail .-> X',
   '  E -. fail .-> X',
   '  E -. success .-> X',
   '  classDef new fill:#0d2820,stroke:#10b981,stroke-width:1.5px,color:#a7e6c8'
