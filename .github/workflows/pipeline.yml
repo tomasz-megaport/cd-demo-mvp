@@ -1,15 +1,14 @@
 name: Pipeline
 
 # MVP pipeline as a single DAG so one GH Actions run page shows the whole
-# graph: ci → release_tag → deploy_preprod → e2e_preprod → tag_preprod_passed.
+# graph: ci → release_tag → deploy_test → e2e → tag_test_passed →
+# deploy_staging → smoke_staging → mark_staging_passed.
 #
-# After this point, the `promote-sandbox-prod` workflow takes over — its 8h
-# cron picks the newest `pre-prod-passed/<sha>` tag and deploys it to
-# sandbox + prod in parallel.
-#
-# Tags still emitted (`v*.*.*`, `pre-prod-passed/<sha>`) so external systems
-# (Sentry releases, audit logs, monitoring) can key off them as immutable
-# artifact identifiers — they outlive 90-day workflow run retention.
+# Tags still emitted (`v*.*.*`, `test-passed/<sha>`, `staging-passed/<sha>`)
+# so external systems (Sentry releases, audit logs, monitoring) can key off
+# them as immutable artifact identifiers — they outlive 90-day workflow run
+# retention. Within this single workflow, jobs use `needs:` not tag-triggers,
+# so no PAT is required.
 
 on:
   push:
@@ -80,7 +79,7 @@ jobs:
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "Released $NEW @ $SHA"
 
-  deploy_preprod:
+  deploy_test:
     needs: release_tag
     runs-on: ubuntu-latest
     steps:
@@ -93,17 +92,17 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Deploy to pre-prod
+      - name: Deploy to test
         env:
           GITHUB_SHA: ${{ needs.release_tag.outputs.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name 'cd-demo-bot'
           git config user.email 'cd-demo-bot@example.com'
-          deploy/deploy.sh pre-prod
+          deploy/deploy.sh test
 
-  e2e_preprod:
-    needs: [release_tag, deploy_preprod]
+  e2e:
+    needs: [release_tag, deploy_test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -121,11 +120,11 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium
 
-      - name: E2E + smoke on pre-prod env
+      - name: E2E smoke on test env
         run: pnpm exec playwright test
 
-  tag_preprod_passed:
-    needs: [release_tag, e2e_preprod]
+  tag_test_passed:
+    needs: [release_tag, e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -133,13 +132,77 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag pre-prod-passed
+      - name: Tag test-passed
         env:
           SHA: ${{ needs.release_tag.outputs.sha }}
         run: |
-          TAG="pre-prod-passed/$SHA"
+          TAG="test-passed/$SHA"
           git config user.name 'cd-demo-bot'
           git config user.email 'cd-demo-bot@example.com'
           git tag "$TAG"
           git push origin "$TAG"
-          echo "Tagged $TAG — eligible for sandbox+prod cron promotion"
+          echo "Tagged $TAG"
+
+  deploy_staging:
+    needs: [release_tag, tag_test_passed]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release_tag.outputs.tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy to staging
+        env:
+          GITHUB_SHA: ${{ needs.release_tag.outputs.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          deploy/deploy.sh staging
+
+  smoke_staging:
+    needs: [release_tag, deploy_staging]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - name: Smoke on staging
+        run: pnpm test:smoke
+
+  mark_staging_passed:
+    needs: [release_tag, smoke_staging]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag staging-passed
+        env:
+          SHA: ${{ needs.release_tag.outputs.sha }}
+        run: |
+          TAG="staging-passed/$SHA"
+          git config user.name 'cd-demo-bot'
+          git config user.email 'cd-demo-bot@example.com'
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "Marked $TAG"
