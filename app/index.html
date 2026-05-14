@@ -138,7 +138,7 @@
 
   /* ── DIAGRAM PANE ────────────────────────────────────────── */
   .diagram-pane {
-    flex: 0 0 60%;
+    flex: 0 0 70%;
     border-right: 1px solid var(--border);
     display: flex;
     align-items: center;
@@ -172,7 +172,7 @@
 
   /* ── INFO PANEL ──────────────────────────────────────────── */
   .info-panel {
-    flex: 0 0 40%;
+    flex: 0 0 30%;
     display: flex;
     flex-direction: column;
     padding: 28px 28px 20px;
@@ -667,9 +667,10 @@ const STEPS_DATA = {
       "nodeId": "A",
       "title": "PR merged · CI green",
       "isNew": false,
-      "description": "Same starting point as today. Difference is what happens next — no human required.",
+      "description": "Same starting point as today. Full E2E suite runs on the PR (existing behaviour). Once merged, the full E2E suite runs again on main (same as today). Only then does the next step (Auto-release tag) fire.",
       "callouts": [
-        { "type": "change",  "text": "Same as current — entry point unchanged" },
+        { "type": "change",  "text": "Entry point unchanged — PR E2E + post-merge main E2E same as today" },
+        { "type": "change",  "text": "Auto-release tag only fires after the post-merge E2E run goes green" },
         { "type": "benefit", "text": "Developer can context-switch immediately, no waiting required" }
       ]
     },
@@ -942,7 +943,7 @@ mermaid.initialize({
 // Defined in JS (not HTML) to avoid any whitespace / entity weirdness.
 // Lines must start at column 0 — Mermaid 10 is picky about leading indent.
 const DIAGRAM_SRC = [
-  'flowchart TD',
+  'flowchart LR',
   '  A["PR merged - CI green"]',
   '  B["Auto-release tag"]:::new',
   '  T["Deploy pre-prod"]:::new',
@@ -961,7 +962,6 @@ const DIAGRAM_SRC = [
   '  V --> E',
   '  E --> S',
   '  E --> F',
-  '  S ~~~ F',
   '  S --> G',
   '  F --> G',
 
