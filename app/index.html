@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MVP CD Flow - Merged at the beginning of demo</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
@@ -168,7 +169,42 @@
   #mermaid-container svg {
     max-width: 100%;
     max-height: calc(100vh - 160px);
+    width: 100%;
+    height: calc(100vh - 160px);
   }
+
+  /* ── ZOOM CONTROLS ───────────────────────────────────────── */
+  .zoom-controls {
+    position: absolute;
+    bottom: 18px;
+    right: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 5;
+  }
+
+  .zoom-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--heading);
+    font-family: var(--font-mono);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .zoom-btn:hover {
+    background: var(--surface2);
+    border-color: #10b981;
+  }
+  .zoom-btn:active { transform: translateY(1px); }
 
   /* ── INFO PANEL ──────────────────────────────────────────── */
   .info-panel {
@@ -616,6 +652,11 @@
     <!-- DIAGRAM -->
     <div class="diagram-pane" aria-label="Pipeline diagram">
       <div id="mermaid-container"></div>
+      <div class="zoom-controls" aria-label="Diagram zoom">
+        <button type="button" class="zoom-btn" onclick="zoomIn()" aria-label="Zoom in">+</button>
+        <button type="button" class="zoom-btn" onclick="zoomOut()" aria-label="Zoom out">−</button>
+        <button type="button" class="zoom-btn" onclick="zoomReset()" aria-label="Reset view" title="Reset zoom &amp; pan">⌂</button>
+      </div>
       <canvas id="worker" aria-hidden="true" width="50" height="50"></canvas>
     </div>
 
@@ -968,13 +1009,49 @@ const DIAGRAM_SRC = [
   '  G -. dispatch .-> H',
   '  H -. restore .-> F',
   '  H -. restore .-> S',
-  '  B -. fail .-> X',
-  '  T -. fail .-> X',
-  '  U -. fail .-> X',
-  '  E -. fail .-> X',
-  '  E -. success .-> X',
+  '  G -. fail / success .-> X',
+
+  '  G ~~~ X',
   '  classDef new fill:#0d2820,stroke:#10b981,stroke-width:1.5px,color:#a7e6c8'
 ].join('\n');
+
+let panZoomInstance = null;
+
+function initPanZoom() {
+  if (typeof svgPanZoom !== 'function') return;
+  const svgEl = document.querySelector('#mermaid-container svg');
+  if (!svgEl) return;
+  // Mermaid emits viewBox + style:max-width; strip the fixed inline sizing
+  // so svg-pan-zoom can drive it.
+  svgEl.style.maxWidth = 'none';
+  svgEl.style.width = '100%';
+  svgEl.style.height = '100%';
+  if (panZoomInstance) {
+    try { panZoomInstance.destroy(); } catch (_) {}
+    panZoomInstance = null;
+  }
+  panZoomInstance = svgPanZoom(svgEl, {
+    zoomEnabled: true,
+    controlIconsEnabled: false,
+    fit: true,
+    center: true,
+    minZoom: 0.4,
+    maxZoom: 6,
+    zoomScaleSensitivity: 0.35,
+    mouseWheelZoomEnabled: true,
+    panEnabled: true,
+    dblClickZoomEnabled: false
+  });
+}
+
+function zoomIn()  { if (panZoomInstance) panZoomInstance.zoomIn(); }
+function zoomOut() { if (panZoomInstance) panZoomInstance.zoomOut(); }
+function zoomReset() {
+  if (!panZoomInstance) return;
+  panZoomInstance.resetZoom();
+  panZoomInstance.center();
+  panZoomInstance.fit();
+}
 
 async function initDiagram() {
   try {
@@ -985,6 +1062,7 @@ async function initDiagram() {
     setTimeout(() => {
       renderStep(currentStep);
       bindNodeClicks();
+      initPanZoom();
     }, 50);
   } catch(e) {
     console.error('Mermaid render error:', e);
