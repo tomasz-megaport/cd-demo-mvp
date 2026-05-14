@@ -141,11 +141,8 @@
   .diagram-pane {
     flex: 0 0 70%;
     border-right: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    overflow: visible;
+    padding: 0;
+    overflow: hidden;
     position: relative;
   }
 
@@ -158,20 +155,20 @@
   }
 
   #mermaid-container {
-    width: 100%;
-    max-height: 100%;
-    overflow: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
   }
 
   #mermaid-container svg {
-    max-width: 100%;
-    max-height: calc(100vh - 160px);
     width: 100%;
-    height: calc(100vh - 160px);
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    display: block;
+    cursor: grab;
   }
+  #mermaid-container svg:active { cursor: grabbing; }
 
   /* ── ZOOM CONTROLS ───────────────────────────────────────── */
   .zoom-controls {
@@ -991,8 +988,10 @@ const DIAGRAM_SRC = [
   '  U["E2E + smoke on pre-prod"]:::new',
   '  V["pre-prod-passed tag"]:::new',
   '  E["Cron promote sandbox + prod"]:::new',
-  '  S["Deploy sandbox"]:::new',
-  '  F["Deploy prod"]',
+  '  subgraph parallel ["parallel · same image, same window"]',
+  '    S["Deploy sandbox"]:::new',
+  '    F["Deploy prod"]',
+  '  end',
   '  G["Live (sandbox = prod)"]',
   '  H["Self-service rollback"]:::new',
   '  X["Slack notify"]:::new',
@@ -1009,9 +1008,11 @@ const DIAGRAM_SRC = [
   '  G -. dispatch .-> H',
   '  H -. restore .-> F',
   '  H -. restore .-> S',
-  '  G -. fail / success .-> X',
-
-  '  G ~~~ X',
+  '  B -. fail .-> X',
+  '  T -. fail .-> X',
+  '  U -. fail .-> X',
+  '  E -. fail .-> X',
+  '  E -. success .-> X',
   '  classDef new fill:#0d2820,stroke:#10b981,stroke-width:1.5px,color:#a7e6c8'
 ].join('\n');
 
