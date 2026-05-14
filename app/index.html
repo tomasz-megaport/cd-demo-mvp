@@ -991,6 +991,7 @@ const DIAGRAM_SRC = [
   '  subgraph parallel ["parallel · same image, same window"]',
   '    S["Deploy sandbox"]:::new',
   '    F["Deploy prod"]',
+  '    S ~~~ F',
   '  end',
   '  G["Live (sandbox = prod)"]',
   '  H["Self-service rollback"]:::new',
