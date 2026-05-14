@@ -741,11 +741,11 @@ const STEPS_DATA = {
     {
       "id": "step-4",
       "nodeId": "U",
-      "title": "E2E + smoke on pre-prod",
+      "title": "Smoke on pre-prod",
       "isNew": true,
-      "description": "Playwright E2E + smoke suite runs against the pre-prod env. Only a green run creates the pre-prod-passed tag. Any failure blocks sandbox/prod promotion without blocking main.",
+      "description": "Playwright smoke suite runs against the pre-prod env. Only a green run creates the pre-prod-passed tag. Any failure blocks sandbox/prod promotion without blocking main.",
       "callouts": [
-        { "type": "change",  "text": "NEW — automated E2E gate on pre-prod before customer-facing envs" },
+        { "type": "change",  "text": "NEW — automated smoke gate on pre-prod before customer-facing envs" },
         { "type": "benefit", "text": "Regressions caught on internal env, not on customer-facing sandbox/prod" },
         { "type": "benefit", "text": "First real promotion gate Megaport has ever had" }
       ]
@@ -981,11 +981,11 @@ mermaid.initialize({
 // Defined in JS (not HTML) to avoid any whitespace / entity weirdness.
 // Lines must start at column 0 — Mermaid 10 is picky about leading indent.
 const DIAGRAM_SRC = [
-  'flowchart LR',
+  'flowchart TD',
   '  A["PR merged - CI green"]',
   '  B["Auto-release tag"]:::new',
   '  T["Deploy pre-prod"]:::new',
-  '  U["E2E + smoke on pre-prod"]:::new',
+  '  U["Smoke on pre-prod"]:::new',
   '  V["pre-prod-passed tag"]:::new',
   '  E["Cron promote sandbox + prod"]:::new',
   '  subgraph parallel ["parallel · same image, same window"]',
